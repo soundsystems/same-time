@@ -252,14 +252,6 @@ export default function SameTime() {
       <div className="w-full max-w-screen-lg">
         <div className="flex flex-col items-center gap-4">
           <UserTimezoneInfo userTimezone={data.userTimezone} />
-          <LocationAutocomplete 
-            locations={data.locations} 
-            onSelect={handleLocationChange}
-            initialLocation={data.userTimezone || undefined}
-            showAllCountries={showAllCountries}
-            priorityCountries={PRIORITY_COUNTRIES}
-            className="w-full max-w-[400px]"
-          />
           <FilterControls 
             locations={data.locations}
             userTimezone={data.userTimezone}
