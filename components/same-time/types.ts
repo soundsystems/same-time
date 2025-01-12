@@ -1,47 +1,66 @@
 export interface Location {
   name: string
-  alternativeName: string
   countryName: string
   countryCode: string
+  timezone: string
+  alternativeName: string
   mainCities: string[]
   currentTimeOffsetInMinutes: number
-  languages: string[]
-  localHour: number
-  timeOfDay: string
   isSimilarTime: boolean
-  timezone: string
+  localHour: number
+  localMinute: number
+  languages: (string | LanguageInfo)[]
   emoji: string
 }
+
+export interface LanguageInfo {
+  code: string
+  name: string
+  display: string
+}
+
+export interface LocationAutocompleteProps {
+  locations: Location[]
+  onSelect: (location: Location) => void
+  initialLocation?: Location
+  'aria-label'?: string
+  showAllCountries?: boolean
+  priorityCountries?: string[]
+  className?: string
+}
+
+export interface LanguageAutocompleteProps {
+  languages: (string | LanguageInfo)[]
+  onSelect: (language: string) => void
+  initialValue?: string
+  'aria-label'?: string
+  className?: string
+  placeholder?: string
+  mobilePlaceholder?: string
+}
+
+export interface SelectProps {
+  value: string
+  onValueChange: (value: string) => void
+  'aria-label'?: string
+  className?: string
+  children: React.ReactNode
+}
+
+export type TimeType = 'All' | 'Same Time' | 'Similar Time' | 'Reverse Time'
+export type TimeOfDay = 'All' | 'Early Morning' | 'Morning' | 'Afternoon' | 'Evening' | 'Night' | 'Late Night'
+export type SortField = 'country' | 'type'
 
 export interface UserTimezone {
   name: string
-  countryCode: string
-  countryName: string
-  languages: string[]
   currentTimeOffsetInMinutes: number
-  emoji: string
-  timeOfDay: string
-}
-
-export type SortField = 'country' | 'time' | 'type' | 'languages'
-export type TimeType = 'All' | 'Same Time' | 'Similar Time' | 'Reverse Time'
-export type TimeOfDay = 'Early Morning' | 'Morning' | 'Afternoon' | 'Evening' | 'Night' | 'Late Night' | 'All'
-
-// Props interfaces
-export interface AnimationConfig {
-  duration: number
-  fadeInDuration?: number
-  fadeOutDuration?: number
-  rotations?: number
-  scale?: [number, number, number]
-  ease?: string
+  languages: string[]
 }
 
 export interface FilterControlsProps {
   locations: Location[]
   userTimezone: UserTimezone | null
-  availableLanguages: string[]
-  availableTimesOfDay: TimeOfDay[]
+  availableLanguages: (string | LanguageInfo)[]
   selectedTimeType: TimeType
   selectedTimeOfDay: TimeOfDay
   selectedLanguage: string
@@ -49,16 +68,22 @@ export interface FilterControlsProps {
   onTimeTypeChange: (type: TimeType) => void
   onTimeOfDayChange: (timeOfDay: TimeOfDay) => void
   onLanguageChange: (language: string) => void
+  availableTimesOfDay: TimeOfDay[]
   onReset: () => void
-  animationConfig?: AnimationConfig
-  languageAutocompleteRef: React.RefObject<{ reset: () => void } | null>
+  languageAutocompleteRef: React.RefObject<{ reset: () => void }>
+  showAllCountries: boolean
+  onShowAllCountriesChange: (showAll: boolean) => void
+  scrollMode: 'pagination' | 'infinite'
+  onScrollModeChange: (mode: 'pagination' | 'infinite') => void
 }
 
-interface LocationsTableProps {
+export interface LocationsTableProps {
   locations: Location[]
   userTimezone: UserTimezone | null
   onLocationChangeAction: (location: Location) => void
   selectedLanguage: string
   selectedTimeType: TimeType
   selectedTimeOfDay: TimeOfDay
+  showAllCountries: boolean
+  priorityCountries: string[]
 }

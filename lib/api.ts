@@ -1,21 +1,13 @@
 import type { Location, UserTimezone } from '@/components/same-time/types'
 
-export async function fetchLocations(timezone?: string) {
-  try {
-    const response = await fetch(`/api/same-time?timezone=${encodeURIComponent(timezone || Intl.DateTimeFormat().resolvedOptions().timeZone)}`)
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-    
-    const data = await response.json()
-    console.log('API Response:', data)
-    return data
-  } catch (error) {
-    console.error('Error fetching locations:', error)
-    return {
-      locations: [],
-      userTimezone: null
-    }
+export async function fetchLocations(timezone: string) {
+  const response = await fetch(`/api/same-time?timezone=${encodeURIComponent(timezone)}`)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch locations: ${response.statusText}`)
   }
+  const data = await response.json()
+  if (!data.locations || !Array.isArray(data.locations)) {
+    throw new Error('Invalid response: missing locations array')
+  }
+  return data
 } 

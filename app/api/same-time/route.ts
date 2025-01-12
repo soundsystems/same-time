@@ -1,200 +1,140 @@
 import { NextResponse } from 'next/server'
 import { getTimeZones, type TimeZone } from '@vvo/tzdb'
-import { formatInTimeZone } from 'date-fns-tz'
-import { countries, languages, type TCountryCode, type TLanguageCode } from 'countries-list'
-import countriesEmoji from 'countries-list/minimal/countries.emoji.min.json'
+import { countries, languages, type TLanguageCode, type TCountryCode } from 'countries-list'
+import { getTimeOfDay } from '@/components/same-time/utils'
+import type { Location, LanguageInfo } from '@/components/same-time/types'
 
-interface CountryData {
-  name: string;
-  native: string;
-  languages: TLanguageCode[];
-  emoji: string;
+export const dynamic = 'force-dynamic'
+
+const COUNTRY_LANGUAGES: Record<string, string[]> = {
+  'AQ': ['English', 'Spanish', 'Russian'],
+  'AW': ['Dutch', 'Papiamento'],
+  'CW': ['Dutch', 'Papiamento', 'English'],
+  'BQ': ['Dutch', 'Papiamento'],
+  'SX': ['Dutch', 'English'],
+  'BL': ['French'],
+  'MF': ['French'],
+  'IN': ['Hindi', 'English', 'Punjabi'],
+  'PK': ['Urdu', 'English', 'Punjabi'],
 }
 
-interface ProcessedLocation {
-  name: string;
-  alternativeName: string;
-  countryName: string;
-  countryCode: string;
-  mainCities: string[];
-  currentTimeOffsetInMinutes: number;
-  languages: string[];
-  localHour: number;
-  timeOfDay: string;
-  isSimilarTime: boolean;
-  timezone: string;
-  emoji: string;
-}
-
-// Language override mappings for countries where the ISO codes don't accurately represent the local languages
-const COUNTRY_LANGUAGE_OVERRIDES: Record<string, string[]> = {
-  'AQ': ['English', 'Spanish', 'Russian'],          // Antarctica
-  'AW': ['Dutch', 'Papiamento'],                   // Aruba
-  'CW': ['Dutch', 'Papiamento', 'English'],        // Curacao
-  'BQ': ['Dutch', 'Papiamento'],                   // Bonaire
-  'SX': ['Dutch', 'English'],                      // Sint Maarten
-  'BL': ['French'],                                // Saint Barthélemy
-  'MF': ['French'],                                // Saint Martin
-}
-
-// Language name standardization mapping
-const LANGUAGE_NAME_STANDARDIZATION: Record<string, string> = {
-  'pa': 'Punjabi',                    // Instead of "Panjabi / Punjabi"
-  'pap': 'Papiamento',                // Explicit mapping for Papiamento
-  'zh': 'Chinese',                    // Instead of "Chinese / 汉语 / 漢語"
-  'fa': 'Persian',                    // Instead of "Persian / فارسی"
-  'ar': 'Arabic',                     // Instead of "Arabic / العربية"
-  'bn': 'Bengali',                    // Instead of "Bengali / বাংলা"
-  'hi': 'Hindi',                      // Instead of "Hindi / हिन्दी"
-}
-
-function getCountryData(countryCode: TCountryCode): CountryData | null {
-  const country = countries[countryCode];
-  if (!country) return null;
+function getLanguageInfo(code: string): LanguageInfo {
+  const language = languages[code as TLanguageCode]
   return {
-    name: country.name,
-    native: country.native,
-    languages: country.languages,
-    emoji: countriesEmoji[countryCode] || '🏳️'
-  };
-}
-
-function standardizeLanguageName(name: string): string {
-  return LANGUAGE_NAME_STANDARDIZATION[name] || name;
-}
-
-function getLanguageNames(languageCodes: TLanguageCode[]): string[] {
-  return languageCodes.map(code => {
-    const langName = languages[code]?.name;
-    // First check if we have a standardized name for this language code
-    if (LANGUAGE_NAME_STANDARDIZATION[code]) {
-      return LANGUAGE_NAME_STANDARDIZATION[code];
-    }
-    // Otherwise return the name from the languages object or the code itself as fallback
-    return langName || code;
-  });
-}
-
-function getCountryLanguages(countryCode: string): string[] {
-  // First check if we have an override for this country
-  if (COUNTRY_LANGUAGE_OVERRIDES[countryCode]) {
-    return COUNTRY_LANGUAGE_OVERRIDES[countryCode];
+    code,
+    name: language?.name || code,
+    display: `${language?.name || code} (${code})`
   }
-
-  // Otherwise use the standard country data
-  const countryData = getCountryData(countryCode as TCountryCode);
-  if (!countryData) return [];
-  
-  return getLanguageNames(countryData.languages);
 }
 
-function getTimeOfDay(hour: number): string {
-  if (hour >= 4 && hour < 8) return 'Early Morning'
-  if (hour >= 8 && hour < 12) return 'Morning'
-  if (hour >= 12 && hour < 16) return 'Afternoon'
-  if (hour >= 16 && hour < 20) return 'Evening'
-  if (hour >= 20 && hour < 24) return 'Night'
-  return 'Late Night'
-}
+function getCountryInfo(countryCode: string) {
+  // Get language codes from our custom mapping or from the countries list
+  const languageCodes = COUNTRY_LANGUAGES[countryCode] || 
+    (countries[countryCode as TCountryCode]?.languages || [])
 
-function mergeLocations(locations: ProcessedLocation[]): ProcessedLocation[] {
-  const mergedMap = new Map<string, ProcessedLocation>();
-
-  for (const location of locations) {
-    const key = `${location.countryCode}-${location.currentTimeOffsetInMinutes}`;
-    
-    if (mergedMap.has(key)) {
-      const existing = mergedMap.get(key);
-      if (existing) {
-        // Merge cities without duplicates
-        const allCities = [...new Set([...existing.mainCities, ...location.mainCities])];
-        existing.mainCities = allCities;
+  // Convert full names to codes if needed and ensure uniqueness
+  const uniqueLanguageCodes = Array.from(new Set(
+    languageCodes.map(lang => {
+      // If it's already a language code, return it
+      if (Object.keys(languages).includes(lang.toLowerCase())) {
+        return lang.toLowerCase()
       }
-    } else {
-      mergedMap.set(key, { ...location });
-    }
-  }
+      // Try to find the language code by name
+      const code = Object.entries(languages).find(
+        ([_, info]) => info.name === lang
+      )?.[0]
+      return code || lang
+    })
+  ))
 
-  return Array.from(mergedMap.values());
+  return {
+    languages: uniqueLanguageCodes.map(code => ({
+      code,
+      name: languages[code as TLanguageCode]?.name || code,
+      display: `${languages[code as TLanguageCode]?.name || code} (${code})`
+    })),
+    emoji: countryCode.toUpperCase().replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt(0)))
+  }
+}
+
+function processTimezone(timezone: TimeZone, userTimezone?: TimeZone): Location | null {
+  try {
+    const countryInfo = getCountryInfo(timezone.countryCode)
+    const localTime = new Date(Date.now() + (timezone.currentTimeOffsetInMinutes || 0) * 60000)
+    const localHour = localTime.getUTCHours()
+    const localMinute = localTime.getUTCMinutes()
+
+    if (typeof timezone.currentTimeOffsetInMinutes !== 'number') {
+      return null
+    }
+
+    // Calculate if this timezone is similar to user's timezone
+    let isSimilarTime = false
+    if (userTimezone && typeof userTimezone.currentTimeOffsetInMinutes === 'number') {
+      const hourDiff = Math.abs(timezone.currentTimeOffsetInMinutes - userTimezone.currentTimeOffsetInMinutes) / 60
+      isSimilarTime = hourDiff <= 2 // Within 2 hours difference
+    }
+
+    return {
+      name: timezone.name,
+      countryName: timezone.countryName,
+      countryCode: timezone.countryCode,
+      timezone: timezone.name,
+      alternativeName: timezone.alternativeName || timezone.name,
+      mainCities: timezone.mainCities,
+      currentTimeOffsetInMinutes: timezone.currentTimeOffsetInMinutes,
+      languages: countryInfo.languages,
+      localHour,
+      localMinute,
+      isSimilarTime,
+      emoji: countryInfo.emoji
+    }
+  } catch {
+    return null
+  }
+}
+
+function mergeLocations(locations: Location[]) {
+  const merged = new Map<string, Location>()
+  
+  for (const location of locations) {
+    if (typeof location.currentTimeOffsetInMinutes !== 'number') continue
+
+    const key = `${location.countryCode}-${location.currentTimeOffsetInMinutes}`
+    const existing = merged.get(key)
+    
+    if (!existing) {
+      merged.set(key, location)
+      continue
+    }
+    
+    existing.mainCities = Array.from(new Set([...existing.mainCities, ...location.mainCities]))
+  }
+  
+  return Array.from(merged.values())
 }
 
 export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const timezone = searchParams.get('timezone')
+  const { searchParams } = new URL(request.url)
+  const timezone = searchParams.get('timezone')
 
-    if (!timezone) {
-      return NextResponse.json({ error: 'Timezone is required' }, { status: 400 })
-    }
-
-    const allTimeZones = getTimeZones()
-    if (!allTimeZones || allTimeZones.length === 0) {
-      return NextResponse.json({ error: 'Failed to fetch timezones' }, { status: 500 })
-    }
-
-    const selectedTimezone = allTimeZones.find(tz => tz.name === timezone)
-    if (!selectedTimezone) {
-      return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 })
-    }
-
-    const now = new Date()
-
-    const locations = allTimeZones.map((tz: TimeZone) => {
-      const localTime = formatInTimeZone(now, tz.name, 'yyyy-MM-dd HH:mm:ssXXX');
-      const localHour = Number.parseInt(formatInTimeZone(now, tz.name, 'H'));
-      const offsetInMinutes = tz.currentTimeOffsetInMinutes;
-
-      const countryData = getCountryData(tz.countryCode as TCountryCode);
-      const languages = getCountryLanguages(tz.countryCode);
-
-      // Log any potentially problematic language assignments for monitoring
-      if (process.env.NODE_ENV === 'development') {
-        if (languages.includes('Punjabi') && !['IN', 'PK'].includes(tz.countryCode)) {
-          console.warn(`Unexpected Punjabi language assignment for country: ${tz.countryCode}`);
-        }
-      }
-
-      return {
-        name: tz.name,
-        alternativeName: tz.alternativeName,
-        countryName: countryData?.name || tz.countryName,
-        countryCode: tz.countryCode,
-        mainCities: tz.mainCities,
-        currentTimeOffsetInMinutes: offsetInMinutes,
-        languages: languages,
-        localHour: localHour,
-        timeOfDay: getTimeOfDay(localHour),
-        isSimilarTime: false,
-        timezone: tz.name,
-        emoji: countryData?.emoji || countriesEmoji[tz.countryCode as keyof typeof countriesEmoji] || '🏳️'
-      };
-    });
-
-    const mergedLocations = mergeLocations(locations);
-
-    const userLocalTime = formatInTimeZone(now, timezone, 'yyyy-MM-dd HH:mm:ssXXX')
-    const userOffsetInMinutes = selectedTimezone.currentTimeOffsetInMinutes
-    const userCountryData = getCountryData(selectedTimezone.countryCode as TCountryCode);
-    const userLanguages = getCountryLanguages(selectedTimezone.countryCode);
-    const userLocalHour = Number.parseInt(formatInTimeZone(now, timezone, 'H'));
-
-    return NextResponse.json({
-      userTimezone: {
-        name: selectedTimezone.name,
-        countryCode: selectedTimezone.countryCode,
-        countryName: userCountryData?.name || selectedTimezone.countryName,
-        languages: userLanguages,
-        currentTimeOffsetInMinutes: userOffsetInMinutes,
-        emoji: userCountryData?.emoji || countriesEmoji[selectedTimezone.countryCode as keyof typeof countriesEmoji] || '🏳️',
-        timeOfDay: getTimeOfDay(userLocalHour)
-      },
-      locations: mergedLocations
-    })
-  } catch (error: unknown) {
-    console.error('Error in API route:', error);
-    if (error instanceof Error) {
-      return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  if (!timezone) {
+    return NextResponse.json({ error: 'Missing timezone parameter' }, { status: 400 })
   }
+
+  const allTimezones = getTimeZones()
+  const userTimezone = allTimezones.find(tz => tz.name === timezone)
+
+  if (!userTimezone) {
+    return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 })
+  }
+
+  const locations = allTimezones
+    .map(tz => processTimezone(tz, userTimezone))
+    .filter((tz): tz is Location => tz !== null)
+
+  return NextResponse.json({
+    locations: mergeLocations(locations),
+    userTimezone: processTimezone(userTimezone)
+  })
 }

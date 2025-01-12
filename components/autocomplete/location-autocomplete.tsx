@@ -20,14 +20,23 @@ interface LocationAutocompleteProps {
   locations: Location[]
   onSelect: (location: Location) => void
   initialLocation?: Location | UserTimezone
+  showAllCountries?: boolean
+  priorityCountries?: string[]
+  name?: string
+  className?: string
+  'aria-label'?: string
 }
 
 export const LocationAutocomplete = React.memo(function LocationAutocomplete({ 
   locations, 
   onSelect, 
   initialLocation,
-  name = "location"
-}: LocationAutocompleteProps & { name?: string }) {
+  name = "location",
+  showAllCountries = false,
+  priorityCountries = [],
+  className,
+  'aria-label': ariaLabel = "Select location"
+}: LocationAutocompleteProps) {
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState("")
   
@@ -59,16 +68,30 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
 
   // Memoize filtered locations
   const filteredLocations = React.useMemo(() => {
-    if (!query) return locations
+    let filtered = locations;
     
-    const searchTerm = query.toLowerCase()
-    return locations.filter(location => (
-      location.name.toLowerCase().includes(searchTerm) ||
-      location.alternativeName.toLowerCase().includes(searchTerm) ||
-      location.countryName.toLowerCase().includes(searchTerm) ||
-      location.mainCities.some(city => city.toLowerCase().includes(searchTerm))
-    ))
-  }, [locations, query])
+    // First filter by priority if not showing all
+    if (!showAllCountries) {
+      filtered = locations.filter(location => 
+        priorityCountries.includes(location.countryName)
+      )
+    }
+    
+    // Then filter by search query
+    if (query) {
+      const searchTerm = query.toLowerCase()
+      filtered = filtered.filter(location => (
+        location.name.toLowerCase().includes(searchTerm) ||
+        location.alternativeName.toLowerCase().includes(searchTerm) ||
+        location.countryName.toLowerCase().includes(searchTerm) ||
+        location.mainCities.some(city => 
+          city.toLowerCase().includes(searchTerm)
+        )
+      ))
+    }
+    
+    return filtered
+  }, [locations, query, showAllCountries, priorityCountries])
 
   return (
     <Popover 
@@ -79,13 +102,12 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
         <Button
           type="button"
           variant="outline"
-          // biome-ignore lint/a11y/useSemanticElements: <explanation>
           role="combobox"
           aria-expanded={open}
           aria-controls="location-search"
           aria-haspopup="listbox"
-          aria-label="Select location"
-          className="w-[400px] justify-between"
+          aria-label={ariaLabel}
+          className={cn("w-[400px] justify-between", className)}
           name={name}
         >
           {selectedLocation ? (

@@ -1,18 +1,34 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, useLayoutEffect } from 'react'
 import { TableSkeleton } from './table-skeleton'
 import LocationsTable from './locations-table'
 import { FilterControls } from './filter-controls'
 import { UserTimezoneInfo } from './user-tz'
 import { fetchLocations } from '@/lib/api'
-import type { Location, UserTimezone, TimeType, TimeOfDay } from './types'
+import type { Location, UserTimezone, TimeType, TimeOfDay, LanguageInfo } from './types'
 import { getLocalTime, getTimeType, getTimeOfDay } from './utils'
 import { useToast } from '@/hooks/use-toast'
+import { languages, type TLanguageCode } from 'countries-list'
+import { LocationAutocomplete } from '@/components/autocomplete/location-autocomplete'
+
+export const PRIORITY_COUNTRIES = [
+  'Albania', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Belarus', 'Belgium',
+  'Bosnia and Herzegovina', 'Brazil', 'Bulgaria', 'Canada', 'Chile', 'China',
+  'Colombia', 'Croatia', 'Czechia', 'Denmark', 'Finland', 'France', 'Germany',
+  'Greece', 'Hungary', 'India', 'Indonesia', 'Ireland', 'Israel', 'Italy',
+  'Japan', 'Kazakhstan', 'Korea', 'Latvia', 'Lithuania', 'Luxembourg',
+  'Malaysia', 'Mexico', 'Moldova', 'Netherlands', 'New Zealand', 'North Macedonia',
+  'Norway', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Romania', 'Russia',
+  'Serbia', 'Slovakia', 'Slovenia', 'South Africa', 'Spain', 'Sweden',
+  'Switzerland', 'Taiwan', 'Thailand', 'Turkey', 'Ukraine', 'United Kingdom',
+  'United States', 'Venezuela'
+]
 
 export default function SameTime() {
   const { toast } = useToast()
-  const languageAutocompleteRef = useRef<{ reset: () => void }>(null)
+  const languageAutocompleteRef = useRef<{ reset: () => void; }>({ reset: () => {} })
+  const [mounted, setMounted] = useState(false)
 
   // 1. All useState hooks
   const [data, setData] = useState<{
@@ -22,137 +38,166 @@ export default function SameTime() {
     locations: [],
     userTimezone: null
   })
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [userTime, setUserTime] = useState<`${number}:${number} ${'AM' | 'PM'}`>('12:00 AM')
   const [selectedTimeType, setSelectedTimeType] = useState<TimeType>('All')
   const [selectedTimeOfDay, setSelectedTimeOfDay] = useState<TimeOfDay>('All')
   const [selectedLanguage, setSelectedLanguage] = useState<string>('All')
+  const [showAllCountries, setShowAllCountries] = useState(false)
+  const [scrollMode, setScrollMode] = useState<'pagination' | 'infinite'>('pagination')
+  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null)
+
+  // Handle hydration using useLayoutEffect
+  useLayoutEffect(() => {
+    setMounted(true)
+  }, [])
 
   // 2. All useCallback hooks
-  const fetchAndUpdateLocations = useCallback(async (timezone: string) => {
+  const fetchAndUpdateLocations = useCallback(async (timezone: string, showToast?: boolean) => {
     setLoading(true)
     setError(null)
     try {
       const newData = await fetchLocations(timezone)
       setData(newData)
-      if (newData.userTimezone) {
-        const time = getLocalTime(newData.userTimezone.currentTimeOffsetInMinutes)
-        if (/^\d{1,2}:\d{2} (AM|PM)$/.test(time)) {
-          setUserTime(time as `${number}:${number} ${'AM' | 'PM'}`)
-        }
+      if (showToast) {
+        toast({
+          title: "Location Changed",
+          description: `Switched to ${newData.userTimezone?.countryName} (${newData.userTimezone?.alternativeName}) time`,
+        })
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch locations')
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : 'Failed to fetch locations',
+        variant: "destructive"
+      })
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [toast])
 
-  // 3. All useEffect hooks
+  // Initial data fetch - moved inside useEffect
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (data.userTimezone) {
-        const time = getLocalTime(data.userTimezone.currentTimeOffsetInMinutes)
-        if (/^\d{1,2}:\d{2} (AM|PM)$/.test(time)) {
-          setUserTime(time as `${number}:${number} ${'AM' | 'PM'}`)
-        }
-      }
-    }, 60000)
+    if (mounted) {
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+      fetchAndUpdateLocations(userTimezone, false)
+    }
+  }, [mounted, fetchAndUpdateLocations])
 
-    return () => clearInterval(interval)
-  }, [data.userTimezone])
-
-  useEffect(() => {
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    fetchAndUpdateLocations(timezone)
+  const handleLocationChange = useCallback((location: Location) => {
+    setSelectedLocation(location)
+    setSelectedTimeType('All')
+    setSelectedTimeOfDay('All')
+    setSelectedLanguage('All')
+    if (languageAutocompleteRef.current) {
+      languageAutocompleteRef.current.reset()
+    }
+    fetchAndUpdateLocations(location.timezone, true)
   }, [fetchAndUpdateLocations])
-
-  // 4. All useMemo hooks
-  const filteredLocations = useMemo(() => 
-    data.locations.filter(location => {
-      const timeType = getTimeType(
-        location.currentTimeOffsetInMinutes, 
-        data.userTimezone?.currentTimeOffsetInMinutes || 0,
-        location.isSimilarTime
-      )
-      const languageMatch = selectedLanguage === 'All' || location.languages.includes(selectedLanguage)
-      const timeTypeMatch = selectedTimeType === 'All' || timeType === selectedTimeType
-      const timeOfDayMatch = selectedTimeOfDay === 'All' || getTimeOfDay(location.localHour) === selectedTimeOfDay
-      return (timeType === 'Same Time' || timeType === 'Similar Time' || timeType === 'Reverse Time') 
-        && languageMatch 
-        && timeTypeMatch
-        && timeOfDayMatch
-    }),
-    [
-      data.locations, 
-      data.userTimezone?.currentTimeOffsetInMinutes,
-      selectedLanguage,
-      selectedTimeType,
-      selectedTimeOfDay
-    ]
-  )
-
-  const availableLanguages = useMemo(() => 
-    Array.from(new Set(filteredLocations.flatMap(location => location.languages))).sort(),
-    [filteredLocations]
-  )
-
-  const availableTimesOfDay = useMemo(() => {
-    const timesInFilteredLocations = new Set(
-      filteredLocations.map(location => getTimeOfDay(location.localHour))
-    )
-    
-    // Always include 'All' option
-    return ['All', ...Array.from(timesInFilteredLocations)] as TimeOfDay[]
-  }, [filteredLocations])
 
   const handleReset = useCallback(() => {
     setSelectedTimeType('All')
     setSelectedTimeOfDay('All')
     setSelectedLanguage('All')
+    if (languageAutocompleteRef.current) {
+      languageAutocompleteRef.current.reset()
+    }
     toast({
-      title: "Location has been changed",
-      description: "All filters have been reset to show all locations",
+      title: "Filters Reset",
+      description: "All filters have been reset to their default values",
     })
   }, [toast])
 
-  // 5. Then conditional returns
-  if (error) {
+  const handleShowAllCountriesChange = useCallback((showAll: boolean) => {
+    setShowAllCountries(showAll)
+    if (!showAll) {
+      setScrollMode('pagination')
+    }
+  }, [])
+
+  const handleScrollModeChange = useCallback((mode: 'pagination' | 'infinite') => {
+    setScrollMode(mode)
+  }, [])
+
+  // Calculate available languages
+  const availableLanguages = useMemo(() => {
+    // First filter locations based on time type and time of day
+    const filteredLocations = data.locations.filter(location => {
+      const timeType = getTimeType(
+        location.currentTimeOffsetInMinutes,
+        data.userTimezone?.currentTimeOffsetInMinutes || 0,
+        location.isSimilarTime
+      )
+      const timeOfDay = getTimeOfDay(location.localHour)
+
+      const matchesTimeType = selectedTimeType === 'All' || timeType === selectedTimeType
+      const matchesTimeOfDay = selectedTimeOfDay === 'All' || timeOfDay === selectedTimeOfDay
+
+      return matchesTimeType && matchesTimeOfDay
+    })
+
+    // Then get languages only from filtered locations
+    const langMap = new Map<string, LanguageInfo>()
+    for (const location of filteredLocations) {
+      for (const lang of location.languages) {
+        if (typeof lang === 'string') {
+          // This shouldn't happen anymore, but handle it just in case
+          const code = lang.toLowerCase()
+          if (!langMap.has(code)) {
+            langMap.set(code, {
+              code,
+              name: languages[code as TLanguageCode]?.name || code,
+              display: `${languages[code as TLanguageCode]?.name || code} (${code})`
+            })
+          }
+        } else {
+          if (!langMap.has(lang.code)) {
+            langMap.set(lang.code, lang)
+          }
+        }
+      }
+    }
+    return Array.from(langMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [data.locations, data.userTimezone?.currentTimeOffsetInMinutes, selectedTimeType, selectedTimeOfDay])
+
+  // Calculate available times of day
+  const availableTimesOfDay = useMemo(() => {
+    const timeSet = new Set<TimeOfDay>()
+    for (const location of data.locations) {
+      const timeOfDay = getTimeOfDay(location.localHour)
+      if (
+        timeOfDay === 'Early Morning' || 
+        timeOfDay === 'Morning' || 
+        timeOfDay === 'Afternoon' || 
+        timeOfDay === 'Evening' || 
+        timeOfDay === 'Night' || 
+        timeOfDay === 'Late Night'
+      ) {
+        timeSet.add(timeOfDay)
+      }
+    }
+    return Array.from(timeSet).sort() as TimeOfDay[]
+  }, [data.locations])
+
+  // If not mounted yet, return null to avoid hydration mismatch
+  if (!mounted) {
     return (
-      <div role="alert" className="p-4 text-red-700 bg-red-100 rounded">
-        <h2 className="font-semibold">Error loading locations</h2>
-        <p>{error}</p>
-        <button 
-          onClick={() => fetchAndUpdateLocations(
-            data.userTimezone?.name ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-          )}
-          className="mt-2 px-4 py-2 bg-red-700 text-white rounded"
-          type="button"
-        >
-          Retry
-        </button>
-      </div>
+      <main className="mt-8 space-y-6">
+        <div className="animate-pulse">
+          <TableSkeleton />
+        </div>
+      </main>
     )
   }
 
-  if (loading && !data.locations.length) {
-    return (
-      <output aria-busy="true" aria-label="Loading locations">
-        <TableSkeleton />
-      </output>
-    )
-  }
-
-  // 6. Finally, main render
   return (
     <main 
       className="mt-8 space-y-6"
       aria-label="Timezone comparison tool"
     >
       <UserTimezoneInfo 
-        userTimezone={data.userTimezone} 
-        userTime={userTime} 
+        userTimezone={data.userTimezone}
       />
       {loading && (
         <output 
@@ -160,6 +205,14 @@ export default function SameTime() {
           aria-live="polite"
         >
           Updating locations...
+        </output>
+      )}
+      {error && (
+        <output 
+          className="text-sm text-red-500"
+          aria-live="assertive"
+        >
+          Error: {error}
         </output>
       )}
       <FilterControls 
@@ -170,34 +223,28 @@ export default function SameTime() {
         selectedTimeType={selectedTimeType}
         selectedTimeOfDay={selectedTimeOfDay}
         selectedLanguage={selectedLanguage}
-        onLocationChange={(location) => {
-          setSelectedTimeType('All')
-          setSelectedTimeOfDay('All')
-          setSelectedLanguage('All')
-          if (languageAutocompleteRef.current) {
-            languageAutocompleteRef.current.reset()
-          }
-          fetchAndUpdateLocations(location.timezone)
-          toast({
-            title: "Location Changed",
-            description: "Location has been updated and filters have been reset",
-          })
-        }}
+        onLocationChange={handleLocationChange}
         onTimeTypeChange={setSelectedTimeType}
         onTimeOfDayChange={setSelectedTimeOfDay}
         onLanguageChange={setSelectedLanguage}
         onReset={handleReset}
         languageAutocompleteRef={languageAutocompleteRef}
+        showAllCountries={showAllCountries}
+        onShowAllCountriesChange={handleShowAllCountriesChange}
+        scrollMode={scrollMode}
+        onScrollModeChange={handleScrollModeChange}
       />
       <LocationsTable 
         locations={data.locations}
         userTimezone={data.userTimezone}
-        onLocationChangeAction={(location) => {
-          fetchAndUpdateLocations(location.timezone)
-        }}
+        onLocationChangeAction={handleLocationChange}
         selectedLanguage={selectedLanguage}
         selectedTimeType={selectedTimeType}
         selectedTimeOfDay={selectedTimeOfDay}
+        showAllCountries={showAllCountries}
+        priorityCountries={PRIORITY_COUNTRIES}
+        scrollMode={scrollMode}
+        onScrollModeChange={handleScrollModeChange}
       />
     </main>
   )
