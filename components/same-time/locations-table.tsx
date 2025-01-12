@@ -29,18 +29,20 @@ import {
 import { ChevronRight, ChevronDown } from 'lucide-react'
 import { LocationPagination } from './pagination'
 import { TimeDisplay } from './time-display'
+import { useLocationFilters } from '@/lib/hooks/useLocationFilters'
+import { useLocationState } from '@/lib/hooks/useLocationState'
 
 interface LocationsTableProps {
   locations: Location[]
   userTimezone: UserTimezone | null
   onLocationChangeAction: (location: Location) => void
-  selectedLanguage: string
   selectedTimeType: TimeType
   selectedTimeOfDay: TimeOfDay
   showAllCountries: boolean
   priorityCountries: string[]
   scrollMode: 'pagination' | 'infinite'
   onScrollModeChange?: (mode: 'pagination' | 'infinite') => void
+  searchedCity: string | null
 }
 
 // Add priority countries array
@@ -71,27 +73,85 @@ const throttle = <T extends (...args: unknown[]) => void>(func: T, limit: number
   }) as T
 }
 
+// Add utility function for truncating city names
+const truncateCityName = (city: string, wordLimit = 2) => {
+  const words = city.split(' ')
+  if (words.length <= wordLimit) return city
+  return words.slice(0, wordLimit).join(' ') + '...'
+}
+
 export default function LocationsTable({ 
   locations, 
   userTimezone,
   onLocationChangeAction,
-  selectedLanguage,
   selectedTimeType,
   selectedTimeOfDay,
   showAllCountries,
   priorityCountries,
   scrollMode = 'pagination',
-  onScrollModeChange
+  onScrollModeChange,
+  searchedCity
 }: LocationsTableProps) {
+  // Get language state from useLocationState
+  const { selectedLanguage } = useLocationState()
+
   // 1. All useState hooks
-  const [sortField, setSortField] = useState<SortField>('type')
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
   const [showPagination, setShowPagination] = useState(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [openStates, setOpenStates] = useState<Record<string, boolean>>({})
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
+
+  // Function to handle location selection
+  const handleLocationSelect = useCallback((location: Location) => {
+    setSelectedLocationId(`${location.countryName}-${location.timezone}-${location.alternativeName}`)
+    onLocationChangeAction(location)
+  }, [onLocationChangeAction])
+
+  // Set initial selected location ID from userTimezone
+  useEffect(() => {
+    if (userTimezone && 'countryName' in userTimezone && 'timezone' in userTimezone && 'alternativeName' in userTimezone) {
+      setSelectedLocationId(`${userTimezone.countryName}-${userTimezone.timezone}-${userTimezone.alternativeName}`)
+    }
+  }, [userTimezone])
+
+  // Get filtered and sorted locations from the hook
+  const filteredAndSortedLocations = useLocationFilters(locations, userTimezone)
+
+  // Filter and sort locations with selected location at top
+  const finalLocations = useMemo(() => {
+    let filtered = showAllCountries 
+      ? filteredAndSortedLocations 
+      : filteredAndSortedLocations.filter((location: Location) => 
+          priorityCountries.includes(location.countryName)
+        )
+
+    // Move selected location to top if exists
+    if (selectedLocationId) {
+      filtered = [
+        ...filtered.filter(loc => 
+          `${loc.countryName}-${loc.timezone}-${loc.alternativeName}` === selectedLocationId
+        ),
+        ...filtered.filter(loc => 
+          `${loc.countryName}-${loc.timezone}-${loc.alternativeName}` !== selectedLocationId
+        )
+      ]
+    }
+
+    return filtered
+  }, [filteredAndSortedLocations, showAllCountries, priorityCountries, selectedLocationId])
+
+  // Scroll selected location into view
+  useEffect(() => {
+    if (selectedLocationId) {
+      const element = document.getElementById(selectedLocationId)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }
+  }, [selectedLocationId])
 
   // 2. useOptimistic hook
   const [optimisticUserTimezone, setOptimisticUserTimezone] = useOptimistic(
@@ -109,145 +169,13 @@ export default function LocationsTable({
     return locationLanguages.filter(lang => userLangSet.has(lang)).length
   }, [userTimezone?.languages])
 
-  const getLocationPriority = useCallback((location: Location): number => {
-    if (!userTimezone) return 6
-    
-    const timeType = getTimeType(
-      location.currentTimeOffsetInMinutes,
-      userTimezone.currentTimeOffsetInMinutes,
-      location.isSimilarTime
-    )
-    const userLangSet = new Set(userTimezone.languages)
-    const hasMatchingLang = hasMatchingLanguage(
-      location.languages, 
-      userTimezone?.languages ?? []
-    )
-    
-    switch (timeType) {
-      case 'Same Time':
-        return hasMatchingLang ? 1 : 2
-      case 'Similar Time':
-        return hasMatchingLang ? 3 : 4
-      case 'Different Time':
-        return hasMatchingLang ? 5 : 6
-      default:
-        return 6
-    }
-  }, [userTimezone])
-
-  const sortLocations = useCallback((a: Location, b: Location) => {
-    if (sortField === 'country') {
-      const direction = sortDirection === 'asc' ? 1 : -1
-      
-      // Always put Antarctica at the bottom when sorting by country
-      if (a.countryName.includes('Antarctica') && !b.countryName.includes('Antarctica')) return 1
-      if (!a.countryName.includes('Antarctica') && b.countryName.includes('Antarctica')) return -1
-      
-      return direction * a.countryName.localeCompare(b.countryName)
-    }
-    
-    if (sortField === 'type') {
-      const typeA = getTimeType(
-        a.currentTimeOffsetInMinutes,
-        userTimezone?.currentTimeOffsetInMinutes || 0,
-        a.isSimilarTime
-      )
-      const typeB = getTimeType(
-        b.currentTimeOffsetInMinutes,
-        userTimezone?.currentTimeOffsetInMinutes || 0,
-        b.isSimilarTime
-      )
-
-      // First, compare by time type priority
-      const priorityA = getTimePriority(typeA, hasMatchingLanguage(a.languages, userTimezone?.languages ?? []))
-      const priorityB = getTimePriority(typeB, hasMatchingLanguage(b.languages, userTimezone?.languages ?? []))
-      
-      if (priorityA !== priorityB) {
-        return priorityA - priorityB
-      }
-
-      // Within each time category:
-      // 1. Check for Antarctica (should be last)
-      if (a.countryName.includes('Antarctica') && !b.countryName.includes('Antarctica')) return 1
-      if (!a.countryName.includes('Antarctica') && b.countryName.includes('Antarctica')) return -1
-      
-      // 2. Then prioritize specific countries
-      const isPriorityA = PRIORITY_COUNTRIES.includes(a.countryName)
-      const isPriorityB = PRIORITY_COUNTRIES.includes(b.countryName)
-      if (isPriorityA !== isPriorityB) {
-        return isPriorityA ? -1 : 1
-      }
-
-      // 3. If same priority, sort by time offset difference
-      const offsetDiffA = Math.abs(a.currentTimeOffsetInMinutes - (userTimezone?.currentTimeOffsetInMinutes || 0))
-      const offsetDiffB = Math.abs(b.currentTimeOffsetInMinutes - (userTimezone?.currentTimeOffsetInMinutes || 0))
-      
-      if (offsetDiffA !== offsetDiffB) {
-        return offsetDiffA - offsetDiffB
-      }
-
-      // 4. Finally, sort by country name
-      return a.countryName.localeCompare(b.countryName)
-    }
-    
-    return 0
-  }, [sortField, sortDirection, userTimezone])
-
-  // Helper function for time priority
-  const getTimePriority = useCallback((type: string, hasMatchingLang: boolean) => {
-    switch (type) {
-      case 'Same Time': return hasMatchingLang ? 1 : 2
-      case 'Similar Time': return hasMatchingLang ? 3 : 4
-      case 'Reverse Time': return hasMatchingLang ? 5 : 6
-      default: return 7
-    }
-  }, [])
-
-  const filterLocations = useCallback((location: Location) => {
-    // Common filter logic
-    const timeType = getTimeType(
-      location.currentTimeOffsetInMinutes, 
-      userTimezone?.currentTimeOffsetInMinutes || 0,
-      location.isSimilarTime
-    )
-    const languageMatch = selectedLanguage === 'All' || location.languages.some(lang => 
-      typeof lang === 'string' ? lang === selectedLanguage : lang.code === selectedLanguage
-    )
-    const timeTypeMatch = selectedTimeType === 'All' || timeType === selectedTimeType
-    const timeOfDayMatch = selectedTimeOfDay === 'All' || getTimeOfDay(location.localHour) === selectedTimeOfDay
-
-    // Base filters that always apply
-    const baseFilters = languageMatch && timeTypeMatch && timeOfDayMatch
-
-    // If showing all countries, only apply base filters
-    if (showAllCountries) {
-      return baseFilters
-    }
-
-    // If not showing all countries, also check priority
-    return priorityCountries.includes(location.countryName) && baseFilters
-  }, [
-    selectedLanguage,
-    selectedTimeType,
-    selectedTimeOfDay,
-    userTimezone?.currentTimeOffsetInMinutes,
-    showAllCountries,
-    priorityCountries
-  ])
-
-  // 4. useMemo hooks
-  const filteredAndSortedLocations = useMemo(() => 
-    [...locations].filter(filterLocations).sort(sortLocations),
-    [locations, filterLocations, sortLocations]
-  )
-
-  const totalPages = Math.ceil(filteredAndSortedLocations.length / itemsPerPage)
+  const totalPages = Math.ceil(finalLocations.length / itemsPerPage)
 
   // Get paginated items
   const paginatedItems = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage
-    return filteredAndSortedLocations.slice(startIndex, startIndex + itemsPerPage)
-  }, [currentPage, itemsPerPage, filteredAndSortedLocations])
+    return finalLocations.slice(startIndex, startIndex + itemsPerPage)
+  }, [currentPage, itemsPerPage, finalLocations])
 
   // Add infinite scroll hook
   const {
@@ -259,7 +187,7 @@ export default function LocationsTable({
     reset: resetInfiniteScroll,
     setInitialItems
   } = useInfiniteScroll({
-    items: filteredAndSortedLocations,
+    items: finalLocations,
     pageSize: itemsPerPage
   })
 
@@ -267,28 +195,23 @@ export default function LocationsTable({
   const handleShowAll = useCallback(() => {
     if (onScrollModeChange) {
       // First set all items to prevent loading more
-      setInitialItems(filteredAndSortedLocations.length)
+      setInitialItems(finalLocations.length)
       // Then change the mode
       onScrollModeChange('infinite')
       // Reset page to 1
       setCurrentPage(1)
     }
-  }, [onScrollModeChange, setInitialItems, filteredAndSortedLocations.length])
+  }, [onScrollModeChange, setInitialItems, finalLocations.length])
 
   // Reset infinite scroll only when filters change, not on mode change
   useEffect(() => {
-    if (filteredAndSortedLocations.length > 0) {
+    if (finalLocations.length > 0) {
       resetInfiniteScroll()
     }
-  }, [filteredAndSortedLocations, resetInfiniteScroll])
+  }, [finalLocations, resetInfiniteScroll])
 
-  // Combine the items based on mode
-  const displayedItems = useMemo(() => {
-    if (scrollMode === 'infinite') {
-      return infiniteScrollItems.length > 0 ? infiniteScrollItems : filteredAndSortedLocations
-    }
-    return paginatedItems
-  }, [scrollMode, infiniteScrollItems, paginatedItems, filteredAndSortedLocations])
+  // Display items based on scroll mode
+  const displayedItems = scrollMode === 'infinite' ? infiniteScrollItems : paginatedItems
 
   // Pagination helpers
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber)
@@ -340,42 +263,6 @@ export default function LocationsTable({
     return pages
   }
 
-  const handleKeyboardNavigation = (e: React.KeyboardEvent) => {
-    switch (e.key) {
-      case 'ArrowLeft':
-        if (currentPage > 1) {
-          e.preventDefault()
-          paginate(currentPage - 1)
-        }
-        break
-      case 'ArrowRight':
-        if (currentPage < totalPages) {
-          e.preventDefault()
-          paginate(currentPage + 1)
-        }
-        break
-      case 'Home':
-        if (currentPage !== 1) {
-          e.preventDefault()
-          paginate(1)
-        }
-        break
-      case 'End':
-        if (currentPage !== totalPages) {
-          e.preventDefault()
-          paginate(totalPages)
-        }
-        break
-    }
-  }
-
-  // Event handlers
-  const handleSort = useCallback((field: SortField) => {
-    setCurrentPage(1)
-    setSortDirection(sortField === field && sortDirection === 'asc' ? 'desc' : 'asc')
-    setSortField(field)
-  }, [sortField, sortDirection])
-
   // Watch for all countries toggle - separate from scroll mode
   useEffect(() => {
     setCurrentPage(1) // Only reset pagination when switching country filter mode
@@ -399,206 +286,429 @@ export default function LocationsTable({
   const indexOfLastItem = currentPage * itemsPerPage
   const indexOfFirstItem = indexOfLastItem - itemsPerPage
 
+  const getCityDisplay = (city: string) => {
+    return city.replace(/\([^)]*\)/g, '').trim()
+  }
+
+  // Add sorting state from useLocationState
+  const { sortField, setSortField, sortDirection, setSortDirection } = useLocationState()
+
+  // Add back handleSort using the state from useLocationState
+  const handleSort = useCallback((field: SortField) => {
+    setCurrentPage(1)
+    setSortDirection(sortField === field && sortDirection === 'asc' ? 'desc' : 'asc')
+    setSortField(field)
+  }, [sortField, sortDirection, setSortDirection, setSortField, setCurrentPage])
+
   return (
     <div className="relative">
       <AnimatePresence>
-        {filteredAndSortedLocations.length > 0 ? (
+        {finalLocations.length > 0 ? (
           <>
             <Table>
               <TableHeader>
                 <motion.tr layout="position" layoutId="table-header">
-                  <TableHead>Country</TableHead>
-                  <TableHead>Local Time</TableHead>
-                  <TableHead>Time Type</TableHead>
-                  <TableHead>Languages</TableHead>
+                  <TableHead onClick={() => handleSort('country')} className="cursor-pointer w-[45%] md:w-auto">
+                    Country {sortField === 'country' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead className="w-[25%] md:w-auto">
+                    <span className="md:hidden">Time</span>
+                    <span className="hidden md:inline">Local Time</span>
+                  </TableHead>
+                  <TableHead onClick={() => handleSort('type')} className="cursor-pointer w-[15%] md:w-auto">
+                    <span className="md:hidden pr-1">Type</span>
+                    <span className="hidden md:inline pr-1">Time Type</span>
+                    {sortField === 'type' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </TableHead>
+                  <TableHead className="w-[15%] md:w-auto">
+                    <span className="md:hidden">Lang</span>
+                    <span className="hidden md:inline">Languages</span>
+                  </TableHead>
                 </motion.tr>
               </TableHeader>
               <TableBody>
-                {displayedItems.map((location) => (
-                  <motion.tr
-                    key={`${location.countryName}-${location.timezone}-${location.alternativeName}`}
-                    layout="position"
-                    layoutId={`row-${location.countryName}-${location.timezone}`}
-                    transition={{ 
-                      layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 },
-                      delay: indexOfFirstItem * 0.05
-                    }}
-                    className={cn(
-                      "hover:bg-gray-100/50 cursor-pointer transition-colors",
-                      hasMatchingLanguage(
-                        location.languages,
-                        userTimezone?.languages ?? []
-                      ) && "bg-blue-50/30"
-                    )}
-                    onClick={() => onLocationChangeAction(location)}
-                  >
-                    <motion.td 
-                      layout="position" 
-                      layoutId={`country-${location.countryName}-${location.timezone}`}
-                      className="text-left"
+                {displayedItems.map((location) => {
+                  const locationId = `${location.countryName}-${location.timezone}-${location.alternativeName}`
+                  const isSelected = locationId === selectedLocationId
+
+                  return (
+                    <motion.tr
+                      id={locationId}
+                      key={locationId}
+                      layout="position"
+                      layoutId={`row-${locationId}`}
+                      transition={{ 
+                        layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 },
+                        delay: indexOfFirstItem * 0.05
+                      }}
+                      className={cn(
+                        "hover:bg-gray-100/50 cursor-pointer transition-colors",
+                        hasMatchingLanguage(
+                          location.languages,
+                          userTimezone?.languages ?? []
+                        ) && "bg-blue-50/30",
+                        isSelected && "bg-blue-100/50 font-semibold"
+                      )}
+                      onClick={() => handleLocationSelect(location)}
                     >
-                      <div className="flex flex-col items-start w-full">
-                        <div className="flex items-center space-x-2">
-                          <motion.div layout="preserve-aspect">
-                            <ReactCountryFlag
-                              countryCode={location.countryCode}
-                              style={{
-                                width: '1.5em',
-                                height: '1.5em'
-                              }}
-                              svg
-                            />
-                          </motion.div>
-                          <motion.span layout="position">
-                            {location.countryName} ({location.alternativeName})
-                          </motion.span>
-                        </div>
-                        {location.mainCities.length > 0 && (
-                          <Collapsible 
-                            className="w-full"
-                            onOpenChange={(isOpen) => {
-                              setOpenStates(prev => ({
-                                ...prev,
-                                [`${location.countryName}-${location.timezone}`]: isOpen
-                              }))
-                            }}
-                          >
-                            <div className="flex items-center text-xs text-gray-500">
-                              <CollapsibleTrigger asChild>
-                                <div className="flex items-center gap-1 hover:text-gray-700 transition-colors cursor-pointer">
-                                  <motion.div
-                                    animate={{ 
-                                      rotate: openStates[`${location.countryName}-${location.timezone}`] ? 90 : 0 
-                                    }}
-                                    transition={{ duration: 0.2 }}
-                                  >
-                                    <ChevronRight className="h-3 w-3" />
-                                  </motion.div>
+                      <motion.td 
+                        layout="position" 
+                        layoutId={`country-${locationId}`}
+                        className="text-left min-w-0"
+                      >
+                        <div className="flex flex-col items-start w-full min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <motion.div layout="preserve-aspect" className="flex-shrink-0">
+                              <ReactCountryFlag
+                                countryCode={location.countryCode}
+                                style={{
+                                  width: '1.5em',
+                                  height: '1.5em'
+                                }}
+                                svg
+                              />
+                            </motion.div>
+                            <motion.span layout="position" className={cn(
+                              isSelected && "font-semibold",
+                              "flex flex-col min-w-0"
+                            )}>
+                              <span className="truncate">
+                                <span className="md:hidden">
+                                  {location.countryName === 'United States' ? 'USA' : 
+                                   location.countryName === 'Bosnia and Herzegovina' ? 'Bosnia' :
+                                   location.countryName}
+                                </span>
+                                <span className="hidden md:inline">{location.countryName}</span>
+                              </span>
+                              <span className={cn(
+                                "text-sm text-gray-500 hidden md:inline truncate",
+                                isSelected && "font-semibold"
+                              )}>
+                                {location.alternativeName}
+                              </span>
+                            </motion.span>
+                          </div>
+                          {(() => {
+                            // Order cities based on search
+                            let orderedCities = location.mainCities;
+                            if (searchedCity) {
+                              const cityIndex = location.mainCities.findIndex(city => 
+                                city.toLowerCase().includes(searchedCity.toLowerCase())
+                              );
+                              if (cityIndex !== -1) {
+                                orderedCities = [
+                                  location.mainCities[cityIndex],
+                                  ...location.mainCities.slice(0, cityIndex),
+                                  ...location.mainCities.slice(cityIndex + 1)
+                                ];
+                              }
+                            }
+
+                            return orderedCities.length > 0 && (
+                              orderedCities.length === 1 ? (
+                                <div className="flex items-center text-xs text-gray-500">
                                   <div className="flex items-center gap-1">
-                                    <span className="truncate">{location.mainCities[0]}</span>
-                                    <AnimatePresence mode="wait">
-                                      {!openStates[`${location.countryName}-${location.timezone}`] && location.mainCities.length > 1 && (
-                                        <motion.span 
-                                          className="text-gray-400 text-[10px] flex-shrink-0"
-                                          initial={{ opacity: 0, x: -10 }}
-                                          animate={{ opacity: 1, x: 0 }}
-                                          exit={{ opacity: 0, x: -10 }}
-                                          transition={{ duration: 0.2 }}
-                                        >
-                                          +{location.mainCities.length - 1} more
-                                        </motion.span>
+                                    <span className="truncate">
+                                      {searchedCity && orderedCities[0].toLowerCase().includes(searchedCity.toLowerCase()) ? (
+                                        <span className="font-semibold">
+                                          <span className="md:hidden">{truncateCityName(orderedCities[0])}</span>
+                                          <span className="hidden md:inline">{orderedCities[0]}</span>
+                                        </span>
+                                      ) : (
+                                        <>
+                                          <span className="md:hidden">{truncateCityName(orderedCities[0])}</span>
+                                          <span className="hidden md:inline">{orderedCities[0]}</span>
+                                        </>
                                       )}
-                                    </AnimatePresence>
+                                    </span>
                                   </div>
                                 </div>
-                              </CollapsibleTrigger>
-                            </div>
-                            <CollapsibleContent className="text-xs text-gray-500">
-                              <motion.div
-                                initial={{ opacity: 0, height: 0 }}
-                                animate={{ opacity: 1, height: "auto" }}
-                                exit={{ opacity: 0, height: 0 }}
-                                transition={{ duration: 0.2 }}
-                              >
-                                {location.mainCities.slice(1).map((city) => (
-                                  <motion.div 
-                                    key={city} 
-                                    className="mt-1"
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ duration: 0.2 }}
-                                  >
-                                    {city}
-                                  </motion.div>
-                                ))}
-                              </motion.div>
-                            </CollapsibleContent>
-                          </Collapsible>
-                        )}
-                      </div>
-                    </motion.td>
-                    <motion.td 
-                      layout="position" 
-                      layoutId={`time-${location.countryName}-${location.timezone}`}
-                      className="text-center"
-                    >
-                      <motion.div layout="preserve-aspect">
-                        <TimeDisplay offsetInMinutes={location.currentTimeOffsetInMinutes} />
-                        {getTimeBadge(location.currentTimeOffsetInMinutes, userTimezone?.currentTimeOffsetInMinutes || 0) && (
-                          <Badge variant="outline" className="ml-2">
-                            {getTimeBadge(location.currentTimeOffsetInMinutes, userTimezone?.currentTimeOffsetInMinutes || 0)}
-                          </Badge>
-                        )}
-                      </motion.div>
-                    </motion.td>
-                    <motion.td 
-                      layout="position" 
-                      layoutId={`type-${location.countryName}-${location.timezone}`}
-                      className="text-center"
-                    >
-                      <motion.span 
-                        layout="preserve-aspect"
-                        className={`px-2 py-1 rounded-full text-sm whitespace-normal ${getTypeColor(getTimeType(
-                          location.currentTimeOffsetInMinutes,
-                          userTimezone?.currentTimeOffsetInMinutes || 0,
-                          location.isSimilarTime
-                        ))}`}
+                              ) : (
+                                <Collapsible 
+                                  className="w-full"
+                                  onOpenChange={(isOpen) => {
+                                    setOpenStates(prev => ({
+                                      ...prev,
+                                      [locationId]: isOpen
+                                    }))
+                                  }}
+                                >
+                                  <div className="flex items-center text-xs text-gray-500">
+                                    <CollapsibleTrigger asChild>
+                                      <div className="flex items-center gap-1 hover:text-gray-700 transition-colors cursor-pointer">
+                                        <motion.div
+                                          animate={{ 
+                                            rotate: openStates[locationId] ? 90 : 0 
+                                          }}
+                                          transition={{ duration: 0.2 }}
+                                        >
+                                          <ChevronRight className="h-3 w-3" />
+                                        </motion.div>
+                                        <div className="flex items-center gap-1">
+                                          <span className="truncate">
+                                            {searchedCity && orderedCities[0].toLowerCase().includes(searchedCity.toLowerCase()) ? (
+                                              <span className="font-semibold">
+                                                <span className="md:hidden">{truncateCityName(orderedCities[0])}</span>
+                                                <span className="hidden md:inline">{orderedCities[0]}</span>
+                                              </span>
+                                            ) : (
+                                              <>
+                                                <span className="md:hidden">{truncateCityName(orderedCities[0])}</span>
+                                                <span className="hidden md:inline">{orderedCities[0]}</span>
+                                              </>
+                                            )}
+                                          </span>
+                                          <AnimatePresence mode="wait">
+                                            {!openStates[locationId] && orderedCities.length > 1 && (
+                                              <motion.span 
+                                                className="text-gray-400 text-[10px] flex-shrink-0"
+                                                initial={{ opacity: 0, x: -10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                exit={{ opacity: 0, x: -10 }}
+                                                transition={{ duration: 0.2 }}
+                                              >
+                                                +{orderedCities.length - 1} more
+                                              </motion.span>
+                                            )}
+                                          </AnimatePresence>
+                                        </div>
+                                      </div>
+                                    </CollapsibleTrigger>
+                                  </div>
+                                  <CollapsibleContent className="text-xs text-gray-500">
+                                    <motion.div
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: "auto" }}
+                                      exit={{ opacity: 0, height: 0 }}
+                                      transition={{ duration: 0.2 }}
+                                    >
+                                      {orderedCities.slice(1).map((city) => (
+                                        <motion.div 
+                                          key={city} 
+                                          className="mt-1"
+                                          initial={{ opacity: 0, x: -10 }}
+                                          animate={{ opacity: 1, x: 0 }}
+                                          transition={{ duration: 0.2 }}
+                                        >
+                                          {searchedCity && city.toLowerCase().includes(searchedCity.toLowerCase()) ? (
+                                            <span className="font-semibold">{city}</span>
+                                          ) : city}
+                                        </motion.div>
+                                      ))}
+                                    </motion.div>
+                                  </CollapsibleContent>
+                                </Collapsible>
+                              )
+                            );
+                          })()}
+                        </div>
+                      </motion.td>
+                      <motion.td 
+                        layout="position" 
+                        layoutId={`time-${locationId}`}
+                        className="text-center"
                       >
-                        {(() => {
-                          const type = getTimeType(
-                            location.currentTimeOffsetInMinutes,
-                            userTimezone?.currentTimeOffsetInMinutes || 0,
-                            location.isSimilarTime
-                          )
-                          const firstWord = type.split(' ')[0]
-                          return (
-                            <>
-                              <span className="md:hidden">
-                                {firstWord}
-                              </span>
-                              <span className="hidden md:inline">
-                                {type}
-                              </span>
-                            </>
-                          )
-                        })()}
-                      </motion.span>
-                    </motion.td>
-                    <motion.td 
-                      layout="position" 
-                      layoutId={`languages-${location.countryName}-${location.timezone}`}
-                      className="text-center"
-                    >
-                      <motion.div 
-                        layout="position"
-                        className="flex flex-col items-center gap-1"
+                        <motion.div layout="preserve-aspect" className={cn(isSelected && "font-semibold")}>
+                          <TimeDisplay offsetInMinutes={location.currentTimeOffsetInMinutes} />
+                          {getTimeBadge(location.currentTimeOffsetInMinutes, userTimezone?.currentTimeOffsetInMinutes || 0) && (
+                            <Badge variant="outline" className="ml-2">
+                              {getTimeBadge(location.currentTimeOffsetInMinutes, userTimezone?.currentTimeOffsetInMinutes || 0)}
+                            </Badge>
+                          )}
+                        </motion.div>
+                      </motion.td>
+                      <motion.td 
+                        layout="position" 
+                        layoutId={`type-${locationId}`}
+                        className="text-center"
                       >
-                        {Array.from(new Set(location.languages)).map((lang) => {
-                          const langCode = typeof lang === 'string' ? lang : lang.code
-                          const langName = typeof lang === 'string' 
-                            ? languages[lang as TLanguageCode]?.name || lang 
-                            : lang.name
-                          
-                          return (
-                            <motion.span 
-                              key={`${location.countryName}-${langCode}`}
-                              layout="preserve-aspect"
-                              className={`inline-block px-2 py-1 rounded-full text-sm mr-1 mb-1 ${
-                                hasMatchingLanguage(
-                                  location.languages,
-                                  userTimezone?.languages ?? []
-                                ) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                              }`}
+                        <motion.span 
+                          layout="preserve-aspect"
+                          className={cn(
+                            `px-2 py-1 rounded-full text-sm whitespace-normal`,
+                            getTypeColor(getTimeType(
+                              location.currentTimeOffsetInMinutes,
+                              userTimezone?.currentTimeOffsetInMinutes || 0,
+                              location.isSimilarTime
+                            )),
+                            isSelected && "font-semibold"
+                          )}
+                        >
+                          {(() => {
+                            const type = getTimeType(
+                              location.currentTimeOffsetInMinutes,
+                              userTimezone?.currentTimeOffsetInMinutes || 0,
+                              location.isSimilarTime
+                            )
+                            const firstWord = type.split(' ')[0]
+                            return (
+                              <>
+                                <span className="md:hidden">
+                                  {firstWord === 'Similar' ? 'Close' : 
+                                    firstWord === 'Different' ? 'Diff' : 
+                                    firstWord === 'Early' ? 'Early' :
+                                    firstWord === 'Late' ? 'Late' :
+                                    firstWord === 'Reverse' ? 'Rev' :
+                                    firstWord}
+                                </span>
+                                <span className="hidden md:inline">
+                                  {type}
+                                </span>
+                              </>
+                            )
+                          })()}
+                        </motion.span>
+                      </motion.td>
+                      <motion.td 
+                        layout="position" 
+                        layoutId={`languages-${locationId}`}
+                        className="text-center"
+                      >
+                        <motion.div 
+                          layout="position"
+                          className="flex flex-col items-center gap-1"
+                        >
+                          {Array.from(new Set(location.languages)).length > 0 && (
+                            <Collapsible 
+                              className="w-full"
+                              onOpenChange={(isOpen) => {
+                                setOpenStates(prev => ({
+                                  ...prev,
+                                  [`${locationId}-langs`]: isOpen
+                                }))
+                              }}
                             >
-                              <span className="hidden md:inline">{langName}</span>
-                              <span className="md:hidden">{langCode}</span>
-                            </motion.span>
-                          )
-                        })}
-                      </motion.div>
-                    </motion.td>
-                  </motion.tr>
-                ))}
+                              <div className="flex items-center justify-center text-xs">
+                                <CollapsibleTrigger asChild>
+                                  <div className="flex items-center gap-1 hover:text-gray-700 transition-colors cursor-pointer">
+                                    {Array.from(new Set(location.languages)).length > 2 && (
+                                      <motion.div
+                                        animate={{ 
+                                          rotate: openStates[`${locationId}-langs`] ? 90 : 0 
+                                        }}
+                                        transition={{ duration: 0.2 }}
+                                      >
+                                        <ChevronRight className="h-3 w-3" />
+                                      </motion.div>
+                                    )}
+                                    <div className="flex items-center gap-1 flex-wrap justify-center">
+                                      {Array.from(new Set(location.languages))
+                                        .sort((a, b) => {
+                                          const aCode = typeof a === 'string' ? a : a.code;
+                                          const bCode = typeof b === 'string' ? b : b.code;
+                                          // If selectedLanguage matches either code, prioritize it
+                                          if (aCode.toLowerCase() === selectedLanguage.toLowerCase()) return -1;
+                                          if (bCode.toLowerCase() === selectedLanguage.toLowerCase()) return 1;
+                                          // Otherwise maintain alphabetical order
+                                          return aCode.localeCompare(bCode);
+                                        })
+                                        .slice(0, 2)
+                                        .map((lang, index) => {
+                                        const langCode = typeof lang === 'string' ? lang : lang.code
+                                        const langName = typeof lang === 'string' 
+                                          ? languages[lang as TLanguageCode]?.name || lang 
+                                          : lang.name
+                                        
+                                        const isSelectedLang = selectedLanguage && 
+                                          langCode.toLowerCase() === selectedLanguage.toLowerCase()
+                                        
+                                        return (
+                                          <motion.span 
+                                            key={`${locationId}-${langCode}`}
+                                            layout="preserve-aspect"
+                                            className={`inline-block px-2 py-1 rounded-full text-sm ${
+                                              hasMatchingLanguage(
+                                                location.languages,
+                                                userTimezone?.languages ?? []
+                                              ) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                            }`}
+                                          >
+                                            <span className={cn("hidden md:inline", isSelectedLang && "font-semibold")}>
+                                              {langName}
+                                            </span>
+                                            <span className={cn("md:hidden", isSelectedLang && "font-semibold")}>
+                                              {langCode}
+                                            </span>
+                                          </motion.span>
+                                        )
+                                      })}
+                                      <AnimatePresence mode="wait">
+                                        {!openStates[`${locationId}-langs`] && Array.from(new Set(location.languages)).length > 2 && (
+                                          <motion.span 
+                                            className="text-gray-400 text-[10px] flex-shrink-0"
+                                            initial={{ opacity: 0, x: -10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -10 }}
+                                            transition={{ duration: 0.2 }}
+                                          >
+                                            +{Array.from(new Set(location.languages)).length - 2} more
+                                          </motion.span>
+                                        )}
+                                      </AnimatePresence>
+                                    </div>
+                                  </div>
+                                </CollapsibleTrigger>
+                              </div>
+                              <CollapsibleContent className="text-xs">
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: "auto" }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="flex flex-wrap justify-center gap-1 mt-1"
+                                >
+                                  {Array.from(new Set(location.languages))
+                                    .sort((a, b) => {
+                                      const aCode = typeof a === 'string' ? a : a.code;
+                                      const bCode = typeof b === 'string' ? b : b.code;
+                                      // If selectedLanguage matches either code, prioritize it
+                                      if (aCode.toLowerCase() === selectedLanguage.toLowerCase()) return -1;
+                                      if (bCode.toLowerCase() === selectedLanguage.toLowerCase()) return 1;
+                                      // Otherwise maintain alphabetical order
+                                      return aCode.localeCompare(bCode);
+                                    })
+                                    .slice(2)
+                                    .map((lang) => {
+                                    const langCode = typeof lang === 'string' ? lang : lang.code
+                                    const langName = typeof lang === 'string' 
+                                      ? languages[lang as TLanguageCode]?.name || lang 
+                                      : lang.name
+                                    
+                                    const isSelectedLang = selectedLanguage && 
+                                      langCode.toLowerCase() === selectedLanguage.toLowerCase()
+                                    
+                                    return (
+                                      <motion.span 
+                                        key={`${locationId}-${langCode}`}
+                                        layout="preserve-aspect"
+                                        initial={{ opacity: 0, x: -10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className={`inline-block px-2 py-1 rounded-full text-sm ${
+                                          hasMatchingLanguage(
+                                            location.languages,
+                                            userTimezone?.languages ?? []
+                                          ) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                        }`}
+                                      >
+                                        <span className={cn("hidden md:inline", isSelectedLang && "font-semibold")}>
+                                          {langName}
+                                        </span>
+                                        <span className={cn("md:hidden", isSelectedLang && "font-semibold")}>
+                                          {langCode}
+                                        </span>
+                                      </motion.span>
+                                    )
+                                  })}
+                                </motion.div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          )}
+                        </motion.div>
+                      </motion.td>
+                    </motion.tr>
+                  )
+                })}
               </TableBody>
             </Table>
 
@@ -610,7 +720,7 @@ export default function LocationsTable({
                 className="mt-4"
               >
                 <LocationPagination 
-                  totalItems={filteredAndSortedLocations.length}
+                  totalItems={finalLocations.length}
                   itemsPerPage={itemsPerPage}
                   onShowAll={handleShowAll}
                 />

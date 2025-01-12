@@ -47,7 +47,7 @@ export interface SelectProps {
   children: React.ReactNode
 }
 
-export type TimeType = 'All' | 'Same Time' | 'Similar Time' | 'Reverse Time'
+export type TimeType = 'All' | 'Same Time' | 'Close Time' | 'Reverse Time'
 export type TimeOfDay = 'All' | 'Early Morning' | 'Morning' | 'Afternoon' | 'Evening' | 'Night' | 'Late Night'
 export type SortField = 'country' | 'type'
 
@@ -80,10 +80,12 @@ export interface FilterControlsProps {
 export interface LocationsTableProps {
   locations: Location[]
   userTimezone: UserTimezone | null
-  onLocationChangeAction: (location: Location) => void
-  selectedLanguage: string
+  onLocationChangeAction: (location: Location, searchedCity?: string) => void
   selectedTimeType: TimeType
   selectedTimeOfDay: TimeOfDay
   showAllCountries: boolean
   priorityCountries: string[]
+  scrollMode: 'pagination' | 'infinite'
+  onScrollModeChange?: (mode: 'pagination' | 'infinite') => void
+  searchedCity?: string | null
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import type { UserTimezone } from './types'
-import { getTimeOfDay } from './utils'
+import { getTimeOfDay, formatTimezoneName } from './utils'
 import { languages, type TLanguageCode } from 'countries-list'
 import { useLiveTime } from '@/hooks/use-live-time'
 import NumberFlow, { NumberFlowGroup } from "@number-flow/react"
@@ -41,7 +41,7 @@ export function UserTimezoneInfo({ userTimezone }: UserTimezoneInfoProps) {
 
   return (
     <div className="font-mono space-y-2">
-      <h2 className="text-sm font-semibold">Your Time Zone: {userTimezone.name}</h2>
+      <h2 className="text-sm font-semibold">Your Time Zone: {formatTimezoneName(userTimezone.name)}</h2>
       <p className="text-sm">
         Local Time:{' '}
         <NumberFlowGroup>

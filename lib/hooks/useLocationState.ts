@@ -5,7 +5,7 @@ export function useLocationState() {
   const [selectedTimeType, setSelectedTimeType] = useQueryState<TimeType>('type', {
     defaultValue: 'All',
     parse: (value): TimeType => 
-      ['All', 'Same Time', 'Similar Time', 'Reverse Time'].includes(value as TimeType) 
+      ['All', 'Same Time', 'Close Time', 'Reverse Time'].includes(value as TimeType) 
         ? (value as TimeType) 
         : 'All',
     history: 'push'

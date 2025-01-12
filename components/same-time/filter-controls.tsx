@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { PRIORITY_COUNTRIES } from './index'
 import { languages, type TLanguageCode } from 'countries-list'
 import { getTimeType, getTimeOfDay } from './utils'
+import { useLocationState } from '@/lib/hooks/useLocationState'
 
 interface AnimationConfig {
   duration: number
@@ -34,11 +35,9 @@ export function FilterControls({
   availableLanguages,
   selectedTimeType,
   selectedTimeOfDay,
-  selectedLanguage,
   onLocationChange,
   onTimeTypeChange,
   onTimeOfDayChange,
-  onLanguageChange,
   availableTimesOfDay,
   onReset,
   languageAutocompleteRef,
@@ -53,9 +52,10 @@ export function FilterControls({
   onShowAllCountriesChange,
   scrollMode,
   onScrollModeChange
-}: FilterControlsProps & { animationConfig?: AnimationConfig }) {
+}: Omit<FilterControlsProps, 'selectedLanguage' | 'onLanguageChange'> & { animationConfig?: AnimationConfig }) {
   const [isSpinning, setIsSpinning] = useState(false)
   const [showReset, setShowReset] = useState(false)
+  const { selectedLanguage, setSelectedLanguage } = useLocationState()
 
   // Check if any filters are active
   useEffect(() => {
@@ -84,55 +84,15 @@ export function FilterControls({
 
   const formattedLanguages = useMemo(() => {
     const allOption: LanguageInfo = { code: 'All', name: 'All', display: 'All Languages' }
-    
-    // Filter locations based on current filters (except language filter)
-    const filteredLocs = locations.filter(location => {
-      const timeType = getTimeType(
-        location.currentTimeOffsetInMinutes, 
-        userTimezone?.currentTimeOffsetInMinutes || 0,
-        location.isSimilarTime
-      )
-      const timeTypeMatch = selectedTimeType === 'All' || timeType === selectedTimeType
-      const timeOfDayMatch = selectedTimeOfDay === 'All' || getTimeOfDay(location.localHour) === selectedTimeOfDay
-
-      // If not showing all countries, check priority
-      if (!showAllCountries && !PRIORITY_COUNTRIES.includes(location.countryName)) {
-        return false
-      }
-
-      return timeTypeMatch && timeOfDayMatch
-    })
-
-    // Get unique languages from filtered locations
-    const langMap = new Map<string, LanguageInfo>()
-    for (const location of filteredLocs) {
-      for (const lang of location.languages) {
-        if (typeof lang === 'string') {
-          const code = lang.toLowerCase()
-          if (!langMap.has(code)) {
-            langMap.set(code, {
-              code,
-              name: languages[code as TLanguageCode]?.name || code,
-              display: `${languages[code as TLanguageCode]?.name || code} (${code})`
-            })
-          }
-        } else {
-          if (!langMap.has(lang.code)) {
-            langMap.set(lang.code, lang)
-          }
-        }
-      }
-    }
-
-    return [allOption, ...Array.from(langMap.values()).sort((a, b) => a.name.localeCompare(b.name))]
-  }, [locations, userTimezone?.currentTimeOffsetInMinutes, selectedTimeType, selectedTimeOfDay, showAllCountries])
+    return [allOption, ...availableLanguages]
+  }, [availableLanguages])
 
   // Validation checks
   if (!Array.isArray(locations) || !Array.isArray(availableLanguages)) {
     return null
   }
 
-  const validTimeTypes: TimeType[] = ['All', 'Same Time', 'Similar Time', 'Reverse Time']
+  const validTimeTypes: TimeType[] = ['All', 'Same Time', 'Close Time', 'Reverse Time']
   const validTimeOfDay: TimeOfDay[] = ['All', 'Early Morning', 'Morning', 'Afternoon', 'Evening', 'Night', 'Late Night']
 
   if (!validTimeTypes.includes(selectedTimeType) || !validTimeOfDay.includes(selectedTimeOfDay)) {
@@ -211,7 +171,7 @@ export function FilterControls({
             <LanguageAutocomplete 
               ref={languageAutocompleteRef}
               languages={formattedLanguages}
-              onSelect={onLanguageChange}
+              onSelect={setSelectedLanguage}
               initialValue={selectedLanguage}
               aria-label="Filter by language" 
               className="w-full"
@@ -220,15 +180,15 @@ export function FilterControls({
             />
             {/* Show toggle only on mobile */}
             <motion.div 
-              className="md:hidden flex flex-col items-start gap-2 min-w-[150px]"
+              className="md:hidden flex items-center gap-2"
               layout="position"
               layoutId="mobile-toggle"
             >
               <Label 
                 htmlFor="show-all-countries-mobile"
-                className="text-sm text-gray-500"
+                className="text-sm text-gray-500 whitespace-nowrap"
               >
-                Show all countries
+                Show all
               </Label>
               <Switch
                 id="show-all-countries-mobile"
@@ -253,7 +213,7 @@ export function FilterControls({
               <SelectContent>
                 <SelectItem value="All">All Types</SelectItem>
                 <SelectItem value="Same Time">Same Time</SelectItem>
-                <SelectItem value="Similar Time">Similar Time</SelectItem>
+                <SelectItem value="Close Time">Close Time</SelectItem>
                 <SelectItem value="Reverse Time">Reverse Time</SelectItem>
               </SelectContent>
             </Select>
@@ -268,7 +228,6 @@ export function FilterControls({
               value={selectedTimeOfDay} 
               onValueChange={onTimeOfDayChange}
               aria-label="Filter by time of day"
-              className="w-full"
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Filter by Time of Day" />

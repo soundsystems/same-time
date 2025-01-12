@@ -11,6 +11,7 @@ import { getLocalTime, getTimeType, getTimeOfDay } from './utils'
 import { useToast } from '@/hooks/use-toast'
 import { languages, type TLanguageCode } from 'countries-list'
 import { LocationAutocomplete } from '@/components/autocomplete/location-autocomplete'
+import { useLocationState } from '@/lib/hooks/useLocationState'
 
 export const PRIORITY_COUNTRIES = [
   'Albania', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Belarus', 'Belgium',
@@ -30,6 +31,18 @@ export default function SameTime() {
   const languageAutocompleteRef = useRef<{ reset: () => void; }>({ reset: () => {} })
   const [mounted, setMounted] = useState(false)
 
+  // Get location state setters
+  const { 
+    selectedTimeType: urlTimeType,
+    setSelectedTimeType: setUrlTimeType, 
+    selectedTimeOfDay: urlTimeOfDay,
+    setSelectedTimeOfDay: setUrlTimeOfDay, 
+    setSelectedLanguage, 
+    setPage, 
+    setSortField, 
+    setSortDirection 
+  } = useLocationState()
+
   // 1. All useState hooks
   const [data, setData] = useState<{
     locations: Location[]
@@ -42,10 +55,30 @@ export default function SameTime() {
   const [error, setError] = useState<string | null>(null)
   const [selectedTimeType, setSelectedTimeType] = useState<TimeType>('All')
   const [selectedTimeOfDay, setSelectedTimeOfDay] = useState<TimeOfDay>('All')
-  const [selectedLanguage, setSelectedLanguage] = useState<string>('All')
   const [showAllCountries, setShowAllCountries] = useState(false)
   const [scrollMode, setScrollMode] = useState<'pagination' | 'infinite'>('pagination')
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null)
+  const [searchedCity, setSearchedCity] = useState<string | null>(null)
+
+  // Sync URL state with local state
+  useEffect(() => {
+    setSelectedTimeType(urlTimeType)
+  }, [urlTimeType])
+
+  useEffect(() => {
+    setSelectedTimeOfDay(urlTimeOfDay)
+  }, [urlTimeOfDay])
+
+  // Update handlers to set both states
+  const handleTimeTypeChange = useCallback((type: TimeType) => {
+    setUrlTimeType(type)
+    setSelectedTimeType(type)
+  }, [setUrlTimeType])
+
+  const handleTimeOfDayChange = useCallback((timeOfDay: TimeOfDay) => {
+    setUrlTimeOfDay(timeOfDay)
+    setSelectedTimeOfDay(timeOfDay)
+  }, [setUrlTimeOfDay])
 
   // Handle hydration using useLayoutEffect
   useLayoutEffect(() => {
@@ -59,10 +92,13 @@ export default function SameTime() {
     try {
       const newData = await fetchLocations(timezone)
       setData(newData)
+      if (newData.userTimezone) {
+        setSelectedLocation(newData.userTimezone)
+      }
       if (showToast) {
         toast({
           title: "Location Changed",
-          description: `Switched to ${newData.userTimezone?.countryName} (${newData.userTimezone?.alternativeName}) time`,
+          description: `Switched to ${newData.userTimezone?.countryName} (${newData.userTimezone?.alternativeName})`,
         })
       }
     } catch (err) {
@@ -85,29 +121,48 @@ export default function SameTime() {
     }
   }, [mounted, fetchAndUpdateLocations])
 
-  const handleLocationChange = useCallback((location: Location) => {
+  const handleLocationChange = useCallback((location: Location, searchedCity?: string) => {
     setSelectedLocation(location)
     setSelectedTimeType('All')
     setSelectedTimeOfDay('All')
-    setSelectedLanguage('All')
     if (languageAutocompleteRef.current) {
       languageAutocompleteRef.current.reset()
     }
     fetchAndUpdateLocations(location.timezone, true)
+    // Update the searched city state
+    setSearchedCity(searchedCity || null)
   }, [fetchAndUpdateLocations])
 
   const handleReset = useCallback(() => {
+    // Reset URL query states
+    setUrlTimeType('All')
+    setUrlTimeOfDay('All')
+    setSelectedLanguage('All')
+    setPage(1)
+    setSortField('type')
+    setSortDirection('asc')
+
+    // Reset local states
     setSelectedTimeType('All')
     setSelectedTimeOfDay('All')
-    setSelectedLanguage('All')
+    setSelectedLocation(null)
+    setSearchedCity(null)
+    setShowAllCountries(false)
+    setScrollMode('pagination')
+
     if (languageAutocompleteRef.current) {
       languageAutocompleteRef.current.reset()
     }
+
+    // Refetch with current timezone to refresh the table
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    fetchAndUpdateLocations(userTimezone, false)
+
     toast({
       title: "Filters Reset",
       description: "All filters have been reset to their default values",
     })
-  }, [toast])
+  }, [toast, fetchAndUpdateLocations, setUrlTimeType, setUrlTimeOfDay, setSelectedLanguage, setPage, setSortField, setSortDirection])
 
   const handleShowAllCountriesChange = useCallback((showAll: boolean) => {
     setShowAllCountries(showAll)
@@ -122,7 +177,7 @@ export default function SameTime() {
 
   // Calculate available languages
   const availableLanguages = useMemo(() => {
-    // First filter locations based on time type and time of day
+    // First filter locations based on time type, time of day, and priority countries
     const filteredLocations = data.locations.filter(location => {
       const timeType = getTimeType(
         location.currentTimeOffsetInMinutes,
@@ -133,8 +188,9 @@ export default function SameTime() {
 
       const matchesTimeType = selectedTimeType === 'All' || timeType === selectedTimeType
       const matchesTimeOfDay = selectedTimeOfDay === 'All' || timeOfDay === selectedTimeOfDay
+      const matchesPriority = showAllCountries || PRIORITY_COUNTRIES.includes(location.countryName)
 
-      return matchesTimeType && matchesTimeOfDay
+      return matchesTimeType && matchesTimeOfDay && matchesPriority
     })
 
     // Then get languages only from filtered locations
@@ -159,7 +215,7 @@ export default function SameTime() {
       }
     }
     return Array.from(langMap.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [data.locations, data.userTimezone?.currentTimeOffsetInMinutes, selectedTimeType, selectedTimeOfDay])
+  }, [data.locations, data.userTimezone?.currentTimeOffsetInMinutes, selectedTimeType, selectedTimeOfDay, showAllCountries])
 
   // Calculate available times of day
   const availableTimesOfDay = useMemo(() => {
@@ -183,7 +239,7 @@ export default function SameTime() {
   // If not mounted yet, return null to avoid hydration mismatch
   if (!mounted) {
     return (
-      <main className="mt-8 space-y-6">
+      <main className="mt-8">
         <div className="animate-pulse">
           <TableSkeleton />
         </div>
@@ -192,60 +248,49 @@ export default function SameTime() {
   }
 
   return (
-    <main 
-      className="mt-8 space-y-6"
-      aria-label="Timezone comparison tool"
-    >
-      <UserTimezoneInfo 
-        userTimezone={data.userTimezone}
-      />
-      {loading && (
-        <output 
-          className="text-sm text-gray-500"
-          aria-live="polite"
-        >
-          Updating locations...
-        </output>
-      )}
-      {error && (
-        <output 
-          className="text-sm text-red-500"
-          aria-live="assertive"
-        >
-          Error: {error}
-        </output>
-      )}
-      <FilterControls 
-        locations={data.locations}
-        userTimezone={data.userTimezone}
-        availableLanguages={availableLanguages}
-        availableTimesOfDay={availableTimesOfDay}
-        selectedTimeType={selectedTimeType}
-        selectedTimeOfDay={selectedTimeOfDay}
-        selectedLanguage={selectedLanguage}
-        onLocationChange={handleLocationChange}
-        onTimeTypeChange={setSelectedTimeType}
-        onTimeOfDayChange={setSelectedTimeOfDay}
-        onLanguageChange={setSelectedLanguage}
-        onReset={handleReset}
-        languageAutocompleteRef={languageAutocompleteRef}
-        showAllCountries={showAllCountries}
-        onShowAllCountriesChange={handleShowAllCountriesChange}
-        scrollMode={scrollMode}
-        onScrollModeChange={handleScrollModeChange}
-      />
-      <LocationsTable 
-        locations={data.locations}
-        userTimezone={data.userTimezone}
-        onLocationChangeAction={handleLocationChange}
-        selectedLanguage={selectedLanguage}
-        selectedTimeType={selectedTimeType}
-        selectedTimeOfDay={selectedTimeOfDay}
-        showAllCountries={showAllCountries}
-        priorityCountries={PRIORITY_COUNTRIES}
-        scrollMode={scrollMode}
-        onScrollModeChange={handleScrollModeChange}
-      />
-    </main>
+    <div className="flex flex-col items-center min-h-screen p-4">
+      <div className="w-full max-w-screen-lg">
+        <div className="flex flex-col items-center gap-4">
+          <UserTimezoneInfo userTimezone={data.userTimezone} />
+          <LocationAutocomplete 
+            locations={data.locations} 
+            onSelect={handleLocationChange}
+            initialLocation={data.userTimezone || undefined}
+            showAllCountries={showAllCountries}
+            priorityCountries={PRIORITY_COUNTRIES}
+            className="w-full max-w-[400px]"
+          />
+          <FilterControls 
+            locations={data.locations}
+            userTimezone={data.userTimezone}
+            availableLanguages={availableLanguages}
+            availableTimesOfDay={availableTimesOfDay}
+            selectedTimeType={selectedTimeType}
+            selectedTimeOfDay={selectedTimeOfDay}
+            onLocationChange={handleLocationChange}
+            onTimeTypeChange={handleTimeTypeChange}
+            onTimeOfDayChange={handleTimeOfDayChange}
+            onReset={handleReset}
+            languageAutocompleteRef={languageAutocompleteRef}
+            showAllCountries={showAllCountries}
+            onShowAllCountriesChange={handleShowAllCountriesChange}
+            scrollMode={scrollMode}
+            onScrollModeChange={handleScrollModeChange}
+          />
+        </div>
+        <LocationsTable 
+          locations={data.locations}
+          userTimezone={data.userTimezone}
+          onLocationChangeAction={handleLocationChange}
+          selectedTimeType={selectedTimeType}
+          selectedTimeOfDay={selectedTimeOfDay}
+          showAllCountries={showAllCountries}
+          priorityCountries={PRIORITY_COUNTRIES}
+          scrollMode={scrollMode}
+          onScrollModeChange={handleScrollModeChange}
+          searchedCity={searchedCity}
+        />
+      </div>
+    </div>
   )
 } 

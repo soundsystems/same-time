@@ -33,7 +33,7 @@ export function getTimeType(
 
   if (timeDiff === 0) return 'Same Time'
   if (timeDiff === 12) return 'Reverse Time'
-  if (timeDiff <= 3 || isSimilarTime) return 'Similar Time'
+  if (timeDiff <= 3 || isSimilarTime) return 'Close Time'
   return 'Different Time'
 }
 
@@ -51,7 +51,7 @@ export function getTypeColor(type: string): string {
       return 'bg-green-100 text-green-800'
     case 'Reverse Time':
       return 'bg-red-100 text-red-800'
-    case 'Similar Time':
+    case 'Close Time':
       return 'bg-blue-100 text-blue-800'
     default:
       return 'bg-gray-100 text-gray-800'
@@ -81,3 +81,15 @@ export const formatTimeString = (timezone: string): `${number}:${number} ${'AM' 
   }
   return timeString as `${number}:${number} ${'AM' | 'PM'}`;
 }; 
+
+export function formatTimezoneName(timezone: string): string {
+  // Remove region prefix (e.g., "America/")
+  const withoutRegion = timezone.split('/').pop() || timezone
+  // Replace underscores with spaces
+  const withSpaces = withoutRegion.replace(/_/g, ' ')
+  // Handle special cases like "GMT+8" or "UTC+8"
+  if (withSpaces.startsWith('GMT') || withSpaces.startsWith('UTC')) {
+    return withSpaces
+  }
+  return withSpaces
+} 

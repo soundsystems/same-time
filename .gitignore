@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Specstory
+.specstory/
+.specstory.json
+specstory.config.js
+specstory.config.ts

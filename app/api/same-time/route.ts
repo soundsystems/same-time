@@ -7,18 +7,60 @@ import type { Location, LanguageInfo } from '@/components/same-time/types'
 export const dynamic = 'force-dynamic'
 
 const COUNTRY_LANGUAGES: Record<string, string[]> = {
-  'AQ': ['English', 'Spanish', 'Russian'],
-  'AW': ['Dutch', 'Papiamento'],
-  'CW': ['Dutch', 'Papiamento', 'English'],
-  'BQ': ['Dutch', 'Papiamento'],
-  'SX': ['Dutch', 'English'],
-  'BL': ['French'],
-  'MF': ['French'],
-  'IN': ['Hindi', 'English', 'Punjabi'],
-  'PK': ['Urdu', 'English', 'Punjabi'],
+  'AQ': ['en', 'es', 'ru'],
+  'AW': ['nl', 'pap'],
+  'CW': ['nl', 'pap', 'en'],
+  'BQ': ['nl', 'pap'],
+  'SX': ['nl', 'en'],
+  'BL': ['fr'],
+  'MF': ['fr'],
+  'IN': [
+    'as',  // Assamese
+    'bn',  // Bengali
+    'brx', // Bodo
+    'doi', // Dogri
+    'gu',  // Gujarati
+    'hi',  // Hindi
+    'kn',  // Kannada
+    'ks',  // Kashmiri
+    'kok', // Konkani
+    'mai', // Maithili
+    'ml',  // Malayalam
+    'mni', // Manipuri (Meitei)
+    'mr',  // Marathi
+    'ne',  // Nepali
+    'or',  // Odia
+    'pj',  // Punjabi
+    'sa',  // Sanskrit
+    'sat', // Santali
+    'sd',  // Sindhi
+    'ta',  // Tamil
+    'te',  // Telugu
+    'ur',  // Urdu
+    'en'   // English
+  ],
+  'PK': ['ur', 'en', 'pj'],
 }
 
 function getLanguageInfo(code: string): LanguageInfo {
+  // Special cases for languages not in ISO standard
+  const specialCases: Record<string, { name: string }> = {
+    'pj': { name: 'Punjabi' },
+    'brx': { name: 'Bodo' },
+    'doi': { name: 'Dogri' },
+    'mai': { name: 'Maithili' },
+    'mni': { name: 'Manipuri' },
+    'sat': { name: 'Santali' }
+  }
+
+  if (code in specialCases) {
+    return {
+      code,
+      name: specialCases[code].name,
+      display: `${specialCases[code].name} (${code})`
+    }
+  }
+
   const language = languages[code as TLanguageCode]
   return {
     code,
@@ -32,27 +74,16 @@ function getCountryInfo(countryCode: string) {
   const languageCodes = COUNTRY_LANGUAGES[countryCode] || 
     (countries[countryCode as TCountryCode]?.languages || [])
 
-  // Convert full names to codes if needed and ensure uniqueness
-  const uniqueLanguageCodes = Array.from(new Set(
-    languageCodes.map(lang => {
-      // If it's already a language code, return it
-      if (Object.keys(languages).includes(lang.toLowerCase())) {
-        return lang.toLowerCase()
-      }
-      // Try to find the language code by name
-      const code = Object.entries(languages).find(
-        ([_, info]) => info.name === lang
-      )?.[0]
-      return code || lang
+  // Convert codes to LanguageInfo objects
+  const uniqueLanguages = Array.from(new Set(
+    languageCodes.map(code => {
+      const normalizedCode = code.toLowerCase()
+      return getLanguageInfo(normalizedCode)
     })
   ))
 
   return {
-    languages: uniqueLanguageCodes.map(code => ({
-      code,
-      name: languages[code as TLanguageCode]?.name || code,
-      display: `${languages[code as TLanguageCode]?.name || code} (${code})`
-    })),
+    languages: uniqueLanguages,
     emoji: countryCode.toUpperCase().replace(/./g, char => String.fromCodePoint(127397 + char.charCodeAt(0)))
   }
 }

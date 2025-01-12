@@ -47,7 +47,11 @@ export function TimeDisplay({ offsetInMinutes }: TimeDisplayProps) {
         </span>
       </NumberFlowGroup>
       <div className="text-sm text-gray-500 whitespace-nowrap">
-        <span className="md:hidden">{timeOfDay}</span>
+        <span className="md:hidden text-xs">
+          {timeOfDay === 'Early Morning' ? 'Early' : 
+           timeOfDay === 'Late Night' ? 'Late' : 
+           timeOfDay}
+        </span>
         <span className="hidden md:inline">{timeOfDay}</span>
       </div>
     </div>
