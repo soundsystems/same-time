@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useRef, useOptimistic, useTransition, u
 import LocationsTable from './locations-table'
 import { FilterControls } from './filter-controls'
 import { UserTimezoneInfo, SelectedTimezoneInfo } from './user-tz'
-import { getLocationsAction, updateTimezone } from '@/app/actions'
+import { getLocationsAction } from '@/app/actions'
 import type { Location, UserTimezone, TimeType, TimeOfDay, LanguageInfo } from './types'
 import { getTimeType, getTimeOfDay, formatTimezoneName } from './utils'
 import { useToast } from '@/hooks/use-toast'
@@ -36,32 +36,50 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
   const { toast } = useToast()
   const languageAutocompleteRef = useRef<{ reset: () => void; }>({ reset: () => {} })
 
-  // Get location state setters
+  // Get location state
   const { 
     selectedTimeType: urlTimeType,
     setTimeType: setUrlTimeType, 
     selectedTimeOfDay: urlTimeOfDay,
     setTimeOfDay: setUrlTimeOfDay, 
-    setLanguage: setSelectedLanguage, 
-    setPage, 
-    setSortField, 
-    setSortDirection,
-    batchUpdate
+    selectedLanguages,
+    toggleLanguage,
+    batchUpdate,
+    selectedTimezones,
+    addSelectedTimezone,
+    removeSelectedTimezone,
+    scrollMode: urlScrollMode,
+    setScrollMode: setUrlScrollMode,
+    showAllCountries: urlShowAllCountries,
+    setShowAllCountries: setUrlShowAllCountries
   } = useLocationState()
 
-  // Transition for optimistic updates
-  const [isPending, startTransition] = useTransition()
-
   // Use optimistic state for data
+  const [, startTransition] = useTransition()
   const [data, setData] = useOptimistic(
     initialData,
     (_current, newData: { locations: Location[]; userTimezone: UserTimezone | null }) => newData
   )
 
-  const [showAllCountries, setShowAllCountries] = useState(false)
-  const [scrollMode, setScrollMode] = useState<'pagination' | 'infinite'>('pagination')
   const [searchedCity, setSearchedCity] = useState<string | null>(null)
-  const [selectedLocations, setSelectedLocations] = useState<Location[]>([])
+  
+  // Use URL state directly - no local state needed
+  const showAllCountries = urlShowAllCountries
+  const scrollMode = urlScrollMode
+  
+  // Decode selected timezones from URL strings back to Location objects
+  const selectedLocations = useMemo(() => {
+    return selectedTimezones
+      .map(encoded => {
+        const [country, tz, alt] = encoded.split('|')
+        return data.locations.find(loc => 
+          loc.countryName === country && 
+          loc.timezone === tz && 
+          loc.alternativeName === alt
+        )
+      })
+      .filter(Boolean) as Location[]
+  }, [selectedTimezones, data.locations])
 
   // Track if timezone detection has run to avoid re-running
   const hasDetectedTimezone = useRef(false)
@@ -101,7 +119,7 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
         variant: "destructive"
       })
     }
-  }, [toast, setData, startTransition])
+  }, [toast, setData])
 
   // Keep ref updated with latest function
   fetchAndUpdateLocationsRef.current = fetchAndUpdateLocations
@@ -109,7 +127,9 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
   // Detect and set user's timezone on initial mount
   // Use client-side cookie update to avoid cache revalidation and rebuild loops
   useEffect(() => {
-    if (hasDetectedTimezone.current) return
+    if (hasDetectedTimezone.current) {
+      return
+    }
     hasDetectedTimezone.current = true
     
     // Defer to next tick to avoid blocking initial render
@@ -168,31 +188,14 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
       return
     }
 
-    // Update selected locations with priority ordering
-    setSelectedLocations(prev => {
-      // Check if already selected
-      const existingIndex = prev.findIndex(loc => isSameLocation(loc, location))
-      
-      if (existingIndex !== -1) {
-        // Already selected - move to front (make it priority)
-        return [location, ...prev.filter((_, i) => i !== existingIndex)]
-      }
-      
-      // New selection
-      if (prev.length >= 3) {
-        // Max reached - replace oldest (last in array)
-        return [location, prev[0], prev[1]]
-      }
-      
-      // Add to front
-      return [location, ...prev]
-    })
+    // Encode location for URL storage
+    const encoded = `${location.countryName}|${location.timezone}|${location.alternativeName}`
+    
+    // Add to selected timezones (hook handles priority ordering and max 3)
+    addSelectedTimezone(encoded)
     
     // Batch URL updates to avoid History API throttling
-    batchUpdate({ timeType: 'All', timeOfDay: 'All', page: 1 })
-    if (languageAutocompleteRef.current) {
-      languageAutocompleteRef.current.reset()
-    }
+    batchUpdate({ timeType: 'All', timeOfDay: 'All', language: [], page: 1 })
     
     // Update the searched city state
     setSearchedCity(searchedCity || null)
@@ -202,37 +205,34 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
       title: "Location Selected",
       description: `Viewing ${location.countryName} (${formatTimezoneName(location.alternativeName)})`,
     })
-  }, [batchUpdate, toast, isUserTimezone, isSameLocation])
+  }, [batchUpdate, toast, isUserTimezone, addSelectedTimezone])
 
   // Handler to clear a specific selection
   const handleClearSelection = useCallback((location: Location) => {
-    setSelectedLocations(prev => prev.filter(loc => !isSameLocation(loc, location)))
+    const encoded = `${location.countryName}|${location.timezone}|${location.alternativeName}`
+    removeSelectedTimezone(encoded)
     toast({
       title: "Selection Cleared",
       description: `Removed ${location.countryName}`,
     })
-  }, [isSameLocation, toast])
+  }, [removeSelectedTimezone, toast])
 
   const handleReset = useCallback(() => {
     // Batch all URL state updates into a single call to avoid History API throttling
     batchUpdate({
       timeType: 'All',
       timeOfDay: 'All',
-      language: 'All',
+      language: [],
       page: 1,
       sortField: 'type',
-      sortDirection: 'asc'
+      sortDirection: 'asc',
+      selectedTzs: [],
+      scrollMode: 'pagination',
+      showAll: false
     })
 
     // Reset local states
     setSearchedCity(null)
-    setShowAllCountries(false)
-    setScrollMode('pagination')
-    setSelectedLocations([])
-
-    if (languageAutocompleteRef.current) {
-      languageAutocompleteRef.current.reset()
-    }
 
     toast({
       title: "Filters Reset",
@@ -241,15 +241,15 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
   }, [toast, batchUpdate])
 
   const handleShowAllCountriesChange = useCallback((showAll: boolean) => {
-    setShowAllCountries(showAll)
+    setUrlShowAllCountries(showAll)
     if (!showAll) {
-      setScrollMode('pagination')
+      setUrlScrollMode('pagination')
     }
-  }, [])
+  }, [setUrlShowAllCountries, setUrlScrollMode])
 
   const handleScrollModeChange = useCallback((mode: 'pagination' | 'infinite') => {
-    setScrollMode(mode)
-  }, [])
+    setUrlScrollMode(mode)
+  }, [setUrlScrollMode])
 
   // Calculate available languages
   const availableLanguages = useMemo(() => {
@@ -329,7 +329,11 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
     <div className="flex flex-col items-center min-h-screen p-4">
       <div className="w-full max-w-5xl">
         <div className="flex flex-col items-center gap-4">
-          <UserTimezoneInfo userTimezone={data.userTimezone} />
+          <UserTimezoneInfo 
+            userTimezone={data.userTimezone} 
+            selectedLanguages={selectedLanguages}
+            onToggleLanguage={toggleLanguage}
+          />
           
           <AnimatePresence mode="popLayout">
             {(selectedLocations || []).length > 0 && (
@@ -340,6 +344,8 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
                     selectedLocation={location}
                     position={index + 1}
                     onClear={() => handleClearSelection(location)}
+                    selectedLanguages={selectedLanguages}
+                    onToggleLanguage={toggleLanguage}
                   />
                 ))}
               </div>

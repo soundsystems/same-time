@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Check, ChevronsUpDown } from "lucide-react"
+import { Check, ChevronsUpDown, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -26,8 +26,9 @@ interface LanguageInfo {
 
 interface LanguageAutocompleteProps {
   languages: (string | LanguageInfo)[]
-  onSelect: (language: string) => void
-  initialValue?: string
+  onSelect: (languages: string[]) => void
+  selectedLanguages: string[]
+  maxSelections?: number
   'aria-label'?: string
   className?: string
   placeholder?: string
@@ -40,27 +41,25 @@ export const LanguageAutocomplete = React.forwardRef<
 >(function LanguageAutocomplete({ 
   languages, 
   onSelect, 
-  initialValue = 'All',
-  'aria-label': ariaLabel = "Select language",
+  selectedLanguages,
+  maxSelections = 8,
+  'aria-label': ariaLabel = "Select languages",
   className,
-  placeholder = "Filter by language",
+  placeholder = "Filter by languages",
   mobilePlaceholder = "Filter"
 }, ref) {
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')
-  const [selectedLanguage, setSelectedLanguage] = useState(initialValue)
 
   useImperativeHandle(ref, () => ({
     reset: () => {
       setValue('')
-      setSelectedLanguage('All')
+      onSelect([])
       setOpen(false)
     }
   }))
 
   const formattedLanguages = useMemo(() => {
-    const allOption = { code: 'All', name: 'All Languages', display: 'All Languages' }
-    
     // Create a Map to ensure unique language entries by code
     const languageMap = new Map()
     
@@ -102,7 +101,7 @@ export const LanguageAutocomplete = React.forwardRef<
       }
     }
 
-    return [allOption, ...Array.from(languageMap.values())]
+    return Array.from(languageMap.values())
   }, [languages])
 
   const filteredLanguages = React.useMemo(() => 
@@ -113,14 +112,17 @@ export const LanguageAutocomplete = React.forwardRef<
     [formattedLanguages, value]
   )
 
-  React.useEffect(() => {
-    setSelectedLanguage(initialValue)
-  }, [initialValue])
-
-  const handleSelectLanguage = (language: string) => {
-    setSelectedLanguage(language)
-    setOpen(false)
-    onSelect(language)
+  const handleToggleLanguage = (languageCode: string) => {
+    const isSelected = selectedLanguages.includes(languageCode)
+    
+    if (isSelected) {
+      // Remove language
+      onSelect(selectedLanguages.filter(l => l !== languageCode))
+    } else if (selectedLanguages.length < maxSelections) {
+      // Add language (max reached check)
+      onSelect([...selectedLanguages, languageCode])
+    }
+    // If max reached and not selected, do nothing
   }
 
   return (
@@ -138,12 +140,11 @@ export const LanguageAutocomplete = React.forwardRef<
           aria-label={ariaLabel}
           className={cn("w-[200px] justify-between", className)}
         >
-          {selectedLanguage === 'All' ? (
-            <span className="fade-in text-left">All Languages</span>
+          {selectedLanguages.length === 0 ? (
+            <span className="fade-in text-left truncate">All Languages</span>
           ) : (
-            <span className="text-left">
-              {formattedLanguages.find(l => l.code === selectedLanguage)?.display || 
-              selectedLanguage}
+            <span className="text-left truncate">
+              {selectedLanguages.length} language{selectedLanguages.length > 1 ? 's' : ''}
             </span>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -160,23 +161,45 @@ export const LanguageAutocomplete = React.forwardRef<
             {filteredLanguages.length === 0 ? (
               <CommandEmpty>No languages found.</CommandEmpty>
             ) : (
-              <CommandGroup>
-                {filteredLanguages.map((language) => (
-                  <CommandItem
-                    key={language.code}
-                    value={language.display}
-                    onSelect={() => handleSelectLanguage(language.code)}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        selectedLanguage === language.code ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    {language.display}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+              <>
+                {selectedLanguages.length > 0 && (
+                  <CommandGroup>
+                    <CommandItem
+                      onSelect={() => onSelect([])}
+                      className="text-destructive"
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Clear all languages
+                    </CommandItem>
+                  </CommandGroup>
+                )}
+                <CommandGroup>
+                  {filteredLanguages.map((language) => {
+                    const isSelected = selectedLanguages.includes(language.code)
+                    const canSelect = selectedLanguages.length < maxSelections || isSelected
+                    
+                    return (
+                      <CommandItem
+                        key={language.code}
+                        value={language.display}
+                        onSelect={() => handleToggleLanguage(language.code)}
+                        disabled={!canSelect}
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            isSelected ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <span className="flex-1">{language.display}</span>
+                        {!canSelect && (
+                          <span className="ml-auto text-xs text-muted-foreground">(Max reached)</span>
+                        )}
+                      </CommandItem>
+                    )
+                  })}
+                </CommandGroup>
+              </>
             )}
           </CommandList>
         </Command>

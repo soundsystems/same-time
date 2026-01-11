@@ -13,7 +13,7 @@ export async function updateTimezone(timezone: string) {
   })
   
   // Revalidate cached location data
-  revalidateTag(`tz-${timezone}`)
+  revalidateTag(`tz-${timezone}`, {})
   
   return { success: true, timezone }
 }

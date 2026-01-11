@@ -53,6 +53,8 @@ export type SortField = 'country' | 'type'
 
 export interface UserTimezone {
   name: string
+  countryName: string
+  alternativeName: string
   currentTimeOffsetInMinutes: number
   languages: (string | LanguageInfo)[]
 }

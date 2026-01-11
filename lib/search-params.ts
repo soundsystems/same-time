@@ -1,15 +1,17 @@
-import { parseAsString, parseAsInteger, createSearchParamsCache } from 'nuqs/server'
-import type { TimeType, TimeOfDay, SortField } from '@/components/same-time/types'
+import { parseAsString, parseAsInteger, parseAsArrayOf, parseAsBoolean, createSearchParamsCache } from 'nuqs/server'
 
 // Shared parsers for both server and client
 export const locationParsers = {
-  language: parseAsString.withDefault('All'),
-  timeType: parseAsString.withDefault<TimeType>('All'),
-  timeOfDay: parseAsString.withDefault<TimeOfDay>('All'),
+  language: parseAsArrayOf(parseAsString).withDefault([]),
+  timeType: parseAsString.withDefault('All'),
+  timeOfDay: parseAsString.withDefault('All'),
   page: parseAsInteger.withDefault(1),
-  sortField: parseAsString.withDefault<SortField>('type'),
-  sortDirection: parseAsString.withDefault<'asc' | 'desc'>('asc'),
+  sortField: parseAsString.withDefault('type'),
+  sortDirection: parseAsString.withDefault('asc'),
   timezone: parseAsString, // Optional timezone param
+  selectedTzs: parseAsArrayOf(parseAsString).withDefault([]), // Format: "CountryName|timezone|altName"
+  scrollMode: parseAsString.withDefault('pagination'),
+  showAll: parseAsBoolean.withDefault(false),
 }
 
 // Server-side cache for accessing search params in Server Components

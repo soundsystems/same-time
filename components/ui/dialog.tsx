@@ -105,7 +105,6 @@ const DialogContent = React.forwardRef<
         asChild
       >
         <motion.div
-          {...props}
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{
             opacity: isOpen ? 1 : 0,

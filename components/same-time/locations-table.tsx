@@ -259,7 +259,7 @@ export default function LocationsTable({
       const code = typeof lang === 'string' ? lang : lang.code
       return code.toLowerCase() === languageCode.toLowerCase()
     })) {
-      return 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300'
+      return 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300'
     }
     
     // Priority 4: Check if matches 3rd selected timezone
@@ -276,7 +276,7 @@ export default function LocationsTable({
   
   // Get all location state from useLocationState in a single call to prevent multiple hook instances
   const {
-    selectedLanguage,
+    selectedLanguages,
     page,
     setPage,
     sortField,
@@ -349,15 +349,18 @@ export default function LocationsTable({
   useEffect(() => {
     if (userTimezone) {
       const userLocationId = getLocationId({ 
+        name: '',
         countryName: userTimezone.countryName,
         timezone: userTimezone.name,
         alternativeName: userTimezone.alternativeName,
         countryCode: '',
         currentTimeOffsetInMinutes: 0,
         localHour: 0,
+        localMinute: 0,
         mainCities: [],
         languages: [],
-        isSimilarTime: false
+        isSimilarTime: false,
+        emoji: ''
       } as Location)
       const element = document.getElementById(userLocationId)
       if (element) {
@@ -503,7 +506,7 @@ export default function LocationsTable({
                   if (selectedIndex === 0) {
                     highlightColor = 'bg-blue-100/50 dark:bg-blue-950/30'
                   } else if (selectedIndex === 1) {
-                    highlightColor = 'bg-teal-100/50 dark:bg-teal-950/30'
+                    highlightColor = 'bg-pink-100/50 dark:bg-pink-950/30'
                   } else if (selectedIndex === 2) {
                     highlightColor = 'bg-purple-100/50 dark:bg-purple-950/30'
                   } else if (isUserTz) {
@@ -744,7 +747,7 @@ export default function LocationsTable({
                               location.currentTimeOffsetInMinutes,
                               location.isSimilarTime,
                               userTimezone?.currentTimeOffsetInMinutes || 0,
-                              userTimezone?.name || null,
+                              userTimezone?.countryName || null,
                               selectedLocations || [],
                               _selectedTimeType
                             )
@@ -796,9 +799,11 @@ export default function LocationsTable({
                                         .sort((a, b) => {
                                           const aCode = typeof a === 'string' ? a : a.code;
                                           const bCode = typeof b === 'string' ? b : b.code;
-                                          // If selectedLanguage matches either code, prioritize it
-                                          if (aCode.toLowerCase() === selectedLanguage.toLowerCase()) return -1;
-                                          if (bCode.toLowerCase() === selectedLanguage.toLowerCase()) return 1;
+                                          // If selectedLanguages includes either code, prioritize it
+                                          const aSelected = selectedLanguages.some(lang => aCode.toLowerCase() === lang.toLowerCase());
+                                          const bSelected = selectedLanguages.some(lang => bCode.toLowerCase() === lang.toLowerCase());
+                                          if (aSelected && !bSelected) return -1;
+                                          if (!aSelected && bSelected) return 1;
                                           // Otherwise maintain alphabetical order
                                           return aCode.localeCompare(bCode);
                                         })
@@ -809,8 +814,9 @@ export default function LocationsTable({
                                           ? languages[lang as TLanguageCode]?.name || lang 
                                           : lang.name
                                         
-                                        const isSelectedLang = selectedLanguage && 
-                                          langCode.toLowerCase() === selectedLanguage.toLowerCase()
+                                        const isSelectedLang = selectedLanguages.some(lang => 
+                                          langCode.toLowerCase() === lang.toLowerCase()
+                                        )
                                         
                                         return (
                                           <motion.span 
@@ -858,9 +864,11 @@ export default function LocationsTable({
                                     .sort((a, b) => {
                                       const aCode = typeof a === 'string' ? a : a.code;
                                       const bCode = typeof b === 'string' ? b : b.code;
-                                      // If selectedLanguage matches either code, prioritize it
-                                      if (aCode.toLowerCase() === selectedLanguage.toLowerCase()) return -1;
-                                      if (bCode.toLowerCase() === selectedLanguage.toLowerCase()) return 1;
+                                      // If selectedLanguages includes either code, prioritize it
+                                      const aSelected = selectedLanguages.some(lang => aCode.toLowerCase() === lang.toLowerCase());
+                                      const bSelected = selectedLanguages.some(lang => bCode.toLowerCase() === lang.toLowerCase());
+                                      if (aSelected && !bSelected) return -1;
+                                      if (!aSelected && bSelected) return 1;
                                       // Otherwise maintain alphabetical order
                                       return aCode.localeCompare(bCode);
                                     })
@@ -871,8 +879,9 @@ export default function LocationsTable({
                                       ? languages[lang as TLanguageCode]?.name || lang 
                                       : lang.name
                                     
-                                    const isSelectedLang = selectedLanguage && 
-                                      langCode.toLowerCase() === selectedLanguage.toLowerCase()
+                                    const isSelectedLang = selectedLanguages.some(lang => 
+                                      langCode.toLowerCase() === lang.toLowerCase()
+                                    )
                                     
                                     return (
                                       <motion.span 

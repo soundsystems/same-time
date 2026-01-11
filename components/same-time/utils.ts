@@ -112,13 +112,13 @@ function matchesProximity(
 
 /**
  * Get the badge info (color and label) for a location based on proximity filter with priority cascade
- * Priority: User timezone (green) > 1st selected (blue) > 2nd selected (teal) > 3rd selected (purple)
+ * Priority: User timezone (green) > 1st selected (blue) > 2nd selected (pink) > 3rd selected (purple)
  */
 export function getProximityBadgeColor(
   locationOffset: number,
   locationIsSimilarTime: boolean,
   userOffset: number,
-  userTimezoneName: string | null,
+  userCountryName: string | null,
   selectedLocations: Location[],
   proximityFilter: TimeType
 ): { color: string; label: string } | null {
@@ -128,10 +128,10 @@ export function getProximityBadgeColor(
   }
 
   // Priority 1: Check if matches user timezone
-  if (userTimezoneName && matchesProximity(locationOffset, userOffset, locationIsSimilarTime, proximityFilter)) {
+  if (userCountryName && matchesProximity(locationOffset, userOffset, locationIsSimilarTime, proximityFilter)) {
     return {
       color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-      label: formatTimezoneName(userTimezoneName)
+      label: userCountryName
     }
   }
 
@@ -144,7 +144,7 @@ export function getProximityBadgeColor(
   )) {
     return {
       color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-      label: formatTimezoneName(selectedLocations[0].alternativeName)
+      label: selectedLocations[0].countryName
     }
   }
 
@@ -156,8 +156,8 @@ export function getProximityBadgeColor(
     proximityFilter
   )) {
     return {
-      color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
-      label: formatTimezoneName(selectedLocations[1].alternativeName)
+      color: 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300',
+      label: selectedLocations[1].countryName
     }
   }
 
@@ -170,7 +170,7 @@ export function getProximityBadgeColor(
   )) {
     return {
       color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-      label: formatTimezoneName(selectedLocations[2].alternativeName)
+      label: selectedLocations[2].countryName
     }
   }
 

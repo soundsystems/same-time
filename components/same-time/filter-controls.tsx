@@ -55,17 +55,17 @@ export function FilterControls({
 }: Omit<FilterControlsProps, 'selectedLanguage' | 'onLanguageChange'> & { animationConfig?: AnimationConfig }) {
   const [isSpinning, setIsSpinning] = useState(false)
   const [showReset, setShowReset] = useState(false)
-  const { selectedLanguage, setLanguage } = useLocationState()
+  const { selectedLanguages, setLanguages } = useLocationState()
 
   // Check if any filters are active
   useEffect(() => {
     const hasActiveFilters = 
       selectedTimeType !== 'All' || 
       selectedTimeOfDay !== 'All' || 
-      selectedLanguage !== 'All'
+      selectedLanguages.length > 0
     
     setShowReset(hasActiveFilters)
-  }, [selectedTimeType, selectedTimeOfDay, selectedLanguage])
+  }, [selectedTimeType, selectedTimeOfDay, selectedLanguages])
 
   const handleReset = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
@@ -171,9 +171,10 @@ export function FilterControls({
             <LanguageAutocomplete 
               ref={languageAutocompleteRef}
               languages={formattedLanguages}
-              onSelect={setLanguage}
-              initialValue={selectedLanguage}
-              aria-label="Filter by language" 
+              onSelect={setLanguages}
+              selectedLanguages={selectedLanguages}
+              maxSelections={8}
+              aria-label="Filter by languages" 
               className="w-full"
               placeholder="All Languages"
               mobilePlaceholder="All Langs"
@@ -264,8 +265,7 @@ export function FilterControls({
                         scale: animationConfig.scale || [1, 0.85, 1]
                       } : {}}
                       transition={{
-                        duration: animationConfig.duration,
-                        ease: animationConfig.ease || "easeInOut"
+                        duration: animationConfig.duration
                       }}
                     >
                       <RefreshCw className="h-4 w-4" />

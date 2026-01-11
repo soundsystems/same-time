@@ -9,7 +9,7 @@ export function useLocationFilters(
   selectedLocations: Location[] = []
 ) {
   const { 
-    selectedLanguage, 
+    selectedLanguages, 
     selectedTimeType, 
     selectedTimeOfDay,
     sortField,
@@ -19,12 +19,14 @@ export function useLocationFilters(
   return useMemo(() => {
     let filtered = [...locations]
 
-    // Filter by language if selected
-    if (selectedLanguage && selectedLanguage !== 'All') {
+    // Filter by languages if any selected (OR logic)
+    if (selectedLanguages.length > 0) {
       filtered = filtered.filter(location => 
-        location.languages.some(lang => {
-          const langCode = typeof lang === 'string' ? lang : lang.code
-          return langCode.toLowerCase() === selectedLanguage.toLowerCase()
+        location.languages.some(locLang => {
+          const locCode = typeof locLang === 'string' ? locLang : locLang.code
+          return selectedLanguages.some(selLang => 
+            locCode.toLowerCase() === selLang.toLowerCase()
+          )
         })
       )
     }
@@ -125,5 +127,5 @@ export function useLocationFilters(
     }
 
     return filtered
-  }, [locations, selectedLanguage, selectedTimeType, selectedTimeOfDay, userTimezone, sortField, sortDirection, selectedLocations])
+  }, [locations, selectedLanguages, selectedTimeType, selectedTimeOfDay, userTimezone, sortField, sortDirection, selectedLocations])
 } 

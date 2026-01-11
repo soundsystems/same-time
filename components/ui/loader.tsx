@@ -34,7 +34,7 @@ interface LoaderProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps
 export function Loader({ className, variant, size, dots, ...props }: LoaderProps) {
   if (dots) {
     return (
-      <div className="flex space-x-1.5" {...props}>
+      <div className="flex space-x-1.5">
         <motion.div
           className="h-2 w-2 rounded-full bg-current"
           animate={{ y: [0, -8, 0] }}
@@ -60,7 +60,8 @@ export function Loader({ className, variant, size, dots, ...props }: LoaderProps
       className={cn(loaderVariants({ variant, size }), className)}
       animate={{ rotate: 360 }}
       transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-      {...props}
+      role="status"
+      aria-label="Loading"
     >
       <span className="sr-only">Loading...</span>
     </motion.div>

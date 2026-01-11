@@ -12,6 +12,8 @@ import ReactCountryFlag from 'react-country-flag'
 
 interface UserTimezoneInfoProps {
   userTimezone: UserTimezone | null
+  selectedLanguages: string[]
+  onToggleLanguage: (langCode: string) => void
 }
 
 interface LanguageInfo {
@@ -28,7 +30,7 @@ const formatLanguages = (langs: Array<string | { code: string; name: string }>) 
   }).join(', ')
 }
 
-export function UserTimezoneInfo({ userTimezone }: UserTimezoneInfoProps) {
+export function UserTimezoneInfo({ userTimezone, selectedLanguages, onToggleLanguage }: UserTimezoneInfoProps) {
   if (!userTimezone) {
     return (
       <motion.div
@@ -83,19 +85,30 @@ export function UserTimezoneInfo({ userTimezone }: UserTimezoneInfoProps) {
       </p>
       <p className="text-xs md:text-sm font-semibold text-gray-500">Time of Day: {timeOfDay}</p>
       <div className="text-xs md:text-sm font-semibold text-gray-700 dark:text-gray-300">
-        Official Languages:{' '}
+        Official Languages
+        <div className="text-[10px] font-normal text-gray-500 dark:text-gray-400 italic mt-0.5">
+          Click badges to filter
+        </div>
         <div className="inline-flex flex-wrap gap-1 mt-1">
           {userTimezone.languages.map(lang => {
+            const langCode = typeof lang === 'string' ? lang : (lang as LanguageInfo).code
             const langName = typeof lang === 'string' 
               ? languages[lang as TLanguageCode]?.name || lang 
               : (lang as LanguageInfo).name
+            const isSelected = selectedLanguages.includes(langCode)
+            
             return (
-              <span 
-                key={typeof lang === 'string' ? lang : lang.code}
-                className="inline-block px-2 py-1 rounded-full text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 font-semibold"
+              <button
+                key={langCode}
+                onClick={() => onToggleLanguage(langCode)}
+                className={`inline-block px-2 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer border ${
+                  isSelected 
+                    ? "bg-green-600 text-white border-green-600 dark:bg-green-600 dark:text-white dark:border-green-600" 
+                    : "bg-green-100 text-green-800 border-green-100 dark:bg-green-900/30 dark:text-green-300 dark:border-green-900/30 hover:bg-green-600 hover:text-white hover:border-green-600 dark:hover:bg-green-600 dark:hover:text-white dark:hover:border-green-600"
+                }`}
               >
                 {langName}
-              </span>
+              </button>
             )
           })}
         </div>
@@ -106,8 +119,10 @@ export function UserTimezoneInfo({ userTimezone }: UserTimezoneInfoProps) {
 
 interface SelectedTimezoneInfoProps {
   selectedLocation: Location
-  position: number // 1 = most recent (blue), 2 = second (teal), 3 = third (purple)
+  position: number // 1 = most recent (blue), 2 = second (pink), 3 = third (purple)
   onClear: () => void
+  selectedLanguages: string[]
+  onToggleLanguage: (langCode: string) => void
 }
 
 const getPositionStyles = (position: number) => {
@@ -119,16 +134,20 @@ const getPositionStyles = (position: number) => {
         text: 'text-blue-900 dark:text-blue-100',
         textSecondary: 'text-blue-700 dark:text-blue-300',
         buttonHover: 'hover:bg-blue-100 dark:hover:bg-blue-900',
-        buttonText: 'text-blue-600 dark:text-blue-400'
+        buttonText: 'text-blue-600 dark:text-blue-400',
+        solidBg: 'bg-blue-600 border-blue-600 dark:bg-blue-600 dark:border-blue-600',
+        hoverBg: 'hover:bg-blue-600 hover:border-blue-600 dark:hover:bg-blue-600 dark:hover:border-blue-600'
       }
     case 2:
       return {
-        bg: 'bg-teal-50 dark:bg-teal-950/30',
-        border: 'border-teal-300 dark:border-teal-700',
-        text: 'text-teal-900 dark:text-teal-100',
-        textSecondary: 'text-teal-700 dark:text-teal-300',
-        buttonHover: 'hover:bg-teal-100 dark:hover:bg-teal-900',
-        buttonText: 'text-teal-600 dark:text-teal-400'
+        bg: 'bg-pink-50 dark:bg-pink-950/30',
+        border: 'border-pink-300 dark:border-pink-700',
+        text: 'text-pink-900 dark:text-pink-100',
+        textSecondary: 'text-pink-700 dark:text-pink-300',
+        buttonHover: 'hover:bg-pink-100 dark:hover:bg-pink-900',
+        buttonText: 'text-pink-600 dark:text-pink-400',
+        solidBg: 'bg-pink-600 border-pink-600 dark:bg-pink-600 dark:border-pink-600',
+        hoverBg: 'hover:bg-pink-600 hover:border-pink-600 dark:hover:bg-pink-600 dark:hover:border-pink-600'
       }
     case 3:
       return {
@@ -137,7 +156,9 @@ const getPositionStyles = (position: number) => {
         text: 'text-purple-900 dark:text-purple-100',
         textSecondary: 'text-purple-700 dark:text-purple-300',
         buttonHover: 'hover:bg-purple-100 dark:hover:bg-purple-900',
-        buttonText: 'text-purple-600 dark:text-purple-400'
+        buttonText: 'text-purple-600 dark:text-purple-400',
+        solidBg: 'bg-purple-600 border-purple-600 dark:bg-purple-600 dark:border-purple-600',
+        hoverBg: 'hover:bg-purple-600 hover:border-purple-600 dark:hover:bg-purple-600 dark:hover:border-purple-600'
       }
     default:
       return {
@@ -146,12 +167,14 @@ const getPositionStyles = (position: number) => {
         text: 'text-blue-900 dark:text-blue-100',
         textSecondary: 'text-blue-700 dark:text-blue-300',
         buttonHover: 'hover:bg-blue-100 dark:hover:bg-blue-900',
-        buttonText: 'text-blue-600 dark:text-blue-400'
+        buttonText: 'text-blue-600 dark:text-blue-400',
+        solidBg: 'bg-blue-600 border-blue-600 dark:bg-blue-600 dark:border-blue-600',
+        hoverBg: 'hover:bg-blue-600 hover:border-blue-600 dark:hover:bg-blue-600 dark:hover:border-blue-600'
       }
   }
 }
 
-export function SelectedTimezoneInfo({ selectedLocation, position, onClear }: SelectedTimezoneInfoProps) {
+export function SelectedTimezoneInfo({ selectedLocation, position, onClear, selectedLanguages, onToggleLanguage }: SelectedTimezoneInfoProps) {
   const timeValues = useLiveTime(selectedLocation.currentTimeOffsetInMinutes)
   const timeOfDay = getTimeOfDay(timeValues.rawHours)
   const styles = getPositionStyles(position)
@@ -230,20 +253,30 @@ export function SelectedTimezoneInfo({ selectedLocation, position, onClear }: Se
         </p>
         
         <div className={`text-xs md:text-sm font-semibold ${styles.textSecondary}`}>
-          Official Languages:{' '}
+          Official Languages
+          <div className={`text-[10px] font-normal ${styles.textSecondary} opacity-70 italic mt-0.5`}>
+            Click badges to filter by selected languages
+          </div>
           <div className="inline-flex flex-wrap gap-1 mt-1">
             {selectedLocation.languages.map(lang => {
               const langCode = typeof lang === 'string' ? lang : lang.code
               const langName = typeof lang === 'string' 
                 ? languages[lang as TLanguageCode]?.name || lang 
                 : lang.name
+              const isSelected = selectedLanguages.includes(langCode)
+              
               return (
-                <span 
+                <button
                   key={langCode}
-                  className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${styles.bg} ${styles.border} border`}
+                  onClick={() => onToggleLanguage(langCode)}
+                  className={`inline-block px-2 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer border ${
+                    isSelected 
+                      ? `${styles.solidBg} text-white` 
+                      : `${styles.bg} ${styles.border} ${styles.hoverBg} hover:text-white`
+                  }`}
                 >
                   {langName}
-                </span>
+                </button>
               )
             })}
           </div>
