@@ -147,6 +147,49 @@ function useIsMobile() {
   return isMobile
 }
 
+// Smart pagination: calculates optimal items per page to avoid orphans
+const calculateSmartPagination = (totalItems: number) => {
+  const MIN_ITEMS_PER_PAGE = 4
+  const MAX_ITEMS_PER_PAGE = 11
+  const MAX_LAST_PAGE = 14
+  
+  // Handle edge cases
+  if (totalItems === 0) {
+    return { itemsPerPage: MAX_ITEMS_PER_PAGE, totalPages: 0 }
+  }
+  
+  // If total items fit in one page
+  if (totalItems <= MAX_LAST_PAGE) {
+    return {
+      itemsPerPage: MAX_ITEMS_PER_PAGE,
+      totalPages: 1
+    }
+  }
+  
+  // Start with standard items per page
+  let itemsPerPage = MAX_ITEMS_PER_PAGE
+  let totalPages = Math.ceil(totalItems / itemsPerPage)
+  let lastPageItems = totalItems % itemsPerPage || itemsPerPage
+  
+  // If last page has too few items (orphan), redistribute
+  if (lastPageItems < MIN_ITEMS_PER_PAGE && lastPageItems > 0) {
+    // Try increasing items per page slightly
+    itemsPerPage = Math.ceil(totalItems / (totalPages - 1))
+    
+    // Ensure we don't exceed max for last page
+    if (itemsPerPage > MAX_LAST_PAGE) {
+      itemsPerPage = MAX_ITEMS_PER_PAGE
+    }
+    
+    totalPages = Math.ceil(totalItems / itemsPerPage)
+  }
+  
+  return {
+    itemsPerPage,
+    totalPages
+  }
+}
+
 export default function LocationsTable({ 
   locations, 
   userTimezone,
@@ -242,7 +285,6 @@ export default function LocationsTable({
   } = useLocationState()
 
   // 1. All useState hooks
-  const [itemsPerPage] = useState(10)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [openStates, setOpenStates] = useState<Record<string, boolean>>({})
 
@@ -297,6 +339,11 @@ export default function LocationsTable({
     return [...orderedLocations, ...remaining, ...antarctica]
   }, [filteredAndSortedLocations, showAllCountries, priorityCountries, selectedLocations, userTimezone, isSameLocation, isUserTimezone, getLocationId])
 
+  // Calculate smart pagination based on filtered locations
+  const { itemsPerPage, totalPages } = useMemo(() => {
+    return calculateSmartPagination(finalLocations.length)
+  }, [finalLocations.length])
+
   // Scroll to user timezone on initial mount
   useEffect(() => {
     if (userTimezone) {
@@ -344,6 +391,13 @@ export default function LocationsTable({
     setPage(newPage)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [setPage])
+
+  // Reset to page 1 if current page exceeds total pages after filtering
+  useEffect(() => {
+    if (page > totalPages && totalPages > 0) {
+      setPage(1)
+    }
+  }, [totalPages, page, setPage])
 
   // Add infinite scroll hook
   const {
@@ -845,6 +899,7 @@ export default function LocationsTable({
                   currentPage={page}
                   totalItems={finalLocations.length}
                   itemsPerPage={itemsPerPage}
+                  totalPages={totalPages}
                   onPageChange={handlePageChange}
                   onShowAll={handleShowAll}
                 />

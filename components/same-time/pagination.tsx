@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 export interface LocationPaginationProps {
   totalItems: number
   itemsPerPage: number
+  totalPages: number
   onShowAll: () => void
   onPageChange: (page: number) => void
   currentPage: number
@@ -13,12 +14,13 @@ export interface LocationPaginationProps {
 
 export function LocationPagination({ 
   totalItems, 
-  itemsPerPage, 
+  itemsPerPage,
+  totalPages,
   onShowAll,
   onPageChange,
   currentPage
 }: LocationPaginationProps) {
-  const totalPages = Math.ceil(totalItems / itemsPerPage)
+  // totalPages is now pre-calculated with smart pagination logic
 
   const handlePrevious = () => {
     if (currentPage > 1) {
@@ -42,15 +44,25 @@ export function LocationPagination({
     }
     
     const pages: (number | string)[] = []
+    const middlePage = Math.ceil(totalPages / 2)
     
-    // Determine the range of pages to show
+    // If past the middle page, show all remaining pages
+    if (currentPage > middlePage) {
+      // Show all remaining pages from current to end
+      for (let i = currentPage; i <= totalPages; i++) {
+        pages.push(i)
+      }
+      return pages
+    }
+    
+    // Before middle: use sliding window
     let startPage: number
     let endPage: number
     
     if (currentPage <= maxVisiblePages) {
       // Near the beginning: show pages 1 through maxVisiblePages
       startPage = 1
-      endPage = maxVisiblePages
+      endPage = Math.min(maxVisiblePages, totalPages)
     } else {
       // Show pages around currentPage
       const halfRange = Math.floor((maxVisiblePages - 1) / 2)
@@ -90,12 +102,12 @@ export function LocationPagination({
           <ChevronLeft className="h-4 w-4" />
           <span className="sr-only">Previous page</span>
         </Button>
-        <div className="flex items-center [&>*:nth-child(n+4)]:hidden [&>*:nth-child(n+6)]:md:inline-flex [&>*:nth-child(n+6)]:lg:inline-flex">
+        <div className="flex items-center">
           {getVisiblePages().map((pageNum, index) => 
             pageNum === 'ellipsis' ? (
               <span 
                 key={`ellipsis-${index}`} 
-                className="px-2 hidden md:inline-block"
+                className="px-2"
               >
                 ...
               </span>
