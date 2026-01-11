@@ -1,5 +1,5 @@
 import { formatInTimeZone } from 'date-fns-tz'
-import type { TimeType, LanguageInfo } from './types'
+import type { TimeType, LanguageInfo, Location } from './types'
 
 export function getTimeOfDay(hour: number): string {
   switch (true) {
@@ -95,4 +95,85 @@ export function formatTimezoneName(timezone: string): string {
     return withSpaces
   }
   return withSpaces
+}
+
+/**
+ * Helper function to check if two locations match the selected proximity type
+ */
+function matchesProximity(
+  locationOffset: number,
+  referenceOffset: number,
+  isSimilarTime: boolean,
+  proximityFilter: TimeType
+): boolean {
+  const timeType = getTimeType(locationOffset, referenceOffset, isSimilarTime)
+  return proximityFilter === 'All' || timeType === proximityFilter
+}
+
+/**
+ * Get the badge info (color and label) for a location based on proximity filter with priority cascade
+ * Priority: User timezone (green) > 1st selected (blue) > 2nd selected (teal) > 3rd selected (purple)
+ */
+export function getProximityBadgeColor(
+  locationOffset: number,
+  locationIsSimilarTime: boolean,
+  userOffset: number,
+  userTimezoneName: string | null,
+  selectedLocations: Location[],
+  proximityFilter: TimeType
+): { color: string; label: string } | null {
+  // If no proximity filter is active, return null
+  if (proximityFilter === 'All') {
+    return null
+  }
+
+  // Priority 1: Check if matches user timezone
+  if (userTimezoneName && matchesProximity(locationOffset, userOffset, locationIsSimilarTime, proximityFilter)) {
+    return {
+      color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+      label: formatTimezoneName(userTimezoneName)
+    }
+  }
+
+  // Priority 2: Check if matches 1st selected timezone
+  if (selectedLocations[0] && matchesProximity(
+    locationOffset,
+    selectedLocations[0].currentTimeOffsetInMinutes,
+    locationIsSimilarTime,
+    proximityFilter
+  )) {
+    return {
+      color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+      label: formatTimezoneName(selectedLocations[0].alternativeName)
+    }
+  }
+
+  // Priority 3: Check if matches 2nd selected timezone
+  if (selectedLocations[1] && matchesProximity(
+    locationOffset,
+    selectedLocations[1].currentTimeOffsetInMinutes,
+    locationIsSimilarTime,
+    proximityFilter
+  )) {
+    return {
+      color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
+      label: formatTimezoneName(selectedLocations[1].alternativeName)
+    }
+  }
+
+  // Priority 4: Check if matches 3rd selected timezone
+  if (selectedLocations[2] && matchesProximity(
+    locationOffset,
+    selectedLocations[2].currentTimeOffsetInMinutes,
+    locationIsSimilarTime,
+    proximityFilter
+  )) {
+    return {
+      color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+      label: formatTimezoneName(selectedLocations[2].alternativeName)
+    }
+  }
+
+  // No match - don't show badge
+  return null
 } 

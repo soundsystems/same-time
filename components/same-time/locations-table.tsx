@@ -11,7 +11,8 @@ import {
   getTimeBadge, 
   getTypeColor, 
   hasMatchingLanguage,
-  formatTimezoneName
+  formatTimezoneName,
+  getProximityBadgeColor
 } from './utils'
 import { cn } from "@/lib/utils"
 import { AnimatePresence, motion } from "motion/react"
@@ -294,7 +295,7 @@ export default function LocationsTable({
   }, [onLocationChangeAction])
 
   // Get filtered and sorted locations from the hook
-  const filteredAndSortedLocations = useLocationFilters(locations, userTimezone)
+  const filteredAndSortedLocations = useLocationFilters(locations, userTimezone, selectedLocations)
 
   // Filter and sort locations with selected locations at top in priority order
   const finalLocations = useMemo(() => {
@@ -476,8 +477,8 @@ export default function LocationsTable({
                     <span className="hidden md:inline">Local Time</span>
                   </TableHead>
                   <TableHead onClick={() => handleSort('type')} className="cursor-pointer w-[15%] md:w-auto">
-                    <span className="md:hidden pr-1">Type</span>
-                    <span className="hidden md:inline pr-1">Time Type</span>
+                    <span className="md:hidden pr-1">Prox</span>
+                    <span className="hidden md:inline pr-1">Proximity</span>
                     {sortField === 'type' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </TableHead>
                   <TableHead className="w-[15%] md:w-auto">
@@ -701,42 +702,59 @@ export default function LocationsTable({
                         layoutId={`type-${locationId}`}
                         className="text-center px-0.5 md:px-4"
                       >
-                        <motion.span 
-                          layout="preserve-aspect"
-                          className={cn(
-                            "px-2 py-1 rounded-full text-xs md:text-sm whitespace-normal",
-                            getTypeColor(getTimeType(
-                              location.currentTimeOffsetInMinutes,
-                              userTimezone?.currentTimeOffsetInMinutes || 0,
-                              location.isSimilarTime
-                            )),
-                            isSelected && "font-semibold"
-                          )}
-                        >
+                        <motion.div layout="preserve-aspect" className="flex flex-col items-center gap-1">
+                          <motion.span 
+                            layout="preserve-aspect"
+                            className={cn(
+                              "px-2 py-1 rounded-full text-xs md:text-sm whitespace-normal",
+                              getTypeColor(getTimeType(
+                                location.currentTimeOffsetInMinutes,
+                                userTimezone?.currentTimeOffsetInMinutes || 0,
+                                location.isSimilarTime
+                              )),
+                              isSelected && "font-semibold"
+                            )}
+                          >
+                            {(() => {
+                              const type = getTimeType(
+                                location.currentTimeOffsetInMinutes,
+                                userTimezone?.currentTimeOffsetInMinutes || 0,
+                                location.isSimilarTime
+                              )
+                              const firstWord = type.split(' ')[0]
+                              return (
+                                <>
+                                  <span className="md:hidden">
+                                    {firstWord === 'Similar' ? 'Close' : 
+                                      firstWord === 'Different' ? 'Diff' : 
+                                      firstWord === 'Early' ? 'Early' :
+                                      firstWord === 'Late' ? 'Late' :
+                                      firstWord === 'Reverse' ? 'Rev' :
+                                      firstWord}
+                                  </span>
+                                  <span className="hidden md:inline">
+                                    {type}
+                                  </span>
+                                </>
+                              )
+                            })()}
+                          </motion.span>
                           {(() => {
-                            const type = getTimeType(
+                            const badgeInfo = getProximityBadgeColor(
                               location.currentTimeOffsetInMinutes,
+                              location.isSimilarTime,
                               userTimezone?.currentTimeOffsetInMinutes || 0,
-                              location.isSimilarTime
+                              userTimezone?.name || null,
+                              selectedLocations || [],
+                              _selectedTimeType
                             )
-                            const firstWord = type.split(' ')[0]
-                            return (
-                              <>
-                                <span className="md:hidden">
-                                  {firstWord === 'Similar' ? 'Close' : 
-                                    firstWord === 'Different' ? 'Diff' : 
-                                    firstWord === 'Early' ? 'Early' :
-                                    firstWord === 'Late' ? 'Late' :
-                                    firstWord === 'Reverse' ? 'Rev' :
-                                    firstWord}
-                                </span>
-                                <span className="hidden md:inline">
-                                  {type}
-                                </span>
-                              </>
-                            )
+                            return badgeInfo ? (
+                              <Badge variant="outline" className={cn("text-[10px] px-1 py-0", badgeInfo.color)}>
+                                {badgeInfo.label}
+                              </Badge>
+                            ) : null
                           })()}
-                        </motion.span>
+                        </motion.div>
                       </motion.td>
                       <motion.td 
                         layout="position" 

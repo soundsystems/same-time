@@ -3,7 +3,11 @@ import type { Location, UserTimezone } from '@/components/same-time/types'
 import { getTimeType, getTimeOfDay } from '@/components/same-time/utils'
 import { useLocationState } from './use-location-state'
 
-export function useLocationFilters(locations: Location[], userTimezone: UserTimezone | null) {
+export function useLocationFilters(
+  locations: Location[], 
+  userTimezone: UserTimezone | null,
+  selectedLocations: Location[] = []
+) {
   const { 
     selectedLanguage, 
     selectedTimeType, 
@@ -25,15 +29,33 @@ export function useLocationFilters(locations: Location[], userTimezone: UserTime
       )
     }
 
-    // Filter by time type if selected
+    // Filter by time type (proximity) if selected
+    // Check if location matches proximity to ANY of the selected timezones (user + 1-3 selections)
     if (selectedTimeType !== 'All') {
       filtered = filtered.filter(location => {
-        const type = getTimeType(
+        // Check against user timezone
+        const typeVsUser = getTimeType(
           location.currentTimeOffsetInMinutes,
           userTimezone?.currentTimeOffsetInMinutes || 0,
           location.isSimilarTime
         )
-        return type === selectedTimeType
+        if (typeVsUser === selectedTimeType) {
+          return true
+        }
+
+        // Check against each selected timezone
+        for (const selected of selectedLocations) {
+          const typeVsSelected = getTimeType(
+            location.currentTimeOffsetInMinutes,
+            selected.currentTimeOffsetInMinutes,
+            location.isSimilarTime
+          )
+          if (typeVsSelected === selectedTimeType) {
+            return true
+          }
+        }
+
+        return false
       })
     }
 
@@ -103,5 +125,5 @@ export function useLocationFilters(locations: Location[], userTimezone: UserTime
     }
 
     return filtered
-  }, [locations, selectedLanguage, selectedTimeType, selectedTimeOfDay, userTimezone, sortField, sortDirection])
+  }, [locations, selectedLanguage, selectedTimeType, selectedTimeOfDay, userTimezone, sortField, sortDirection, selectedLocations])
 } 

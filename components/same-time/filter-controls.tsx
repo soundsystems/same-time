@@ -205,16 +205,16 @@ export function FilterControls({
             <Select 
               value={selectedTimeType} 
               onValueChange={onTimeTypeChange}
-              aria-label="Filter by time type"
+              aria-label="Filter by proximity"
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Filter by Time Type" />
+                <SelectValue placeholder="Filter by Proximity" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="All">All Proximities</SelectItem>
-                <SelectItem value="Same Time">Same Time</SelectItem>
-                <SelectItem value="Close Time">Close Time</SelectItem>
-                <SelectItem value="Reverse Time">Reverse Time</SelectItem>
+                <SelectItem value="Same Time">✅ Same Time</SelectItem>
+                <SelectItem value="Close Time">☑️ Close Time</SelectItem>
+                <SelectItem value="Reverse Time">😵‍💫 Reverse Time</SelectItem>
               </SelectContent>
             </Select>
           </motion.div>
