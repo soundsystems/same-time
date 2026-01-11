@@ -1,7 +1,8 @@
 import { LocationAutocomplete } from '../autocomplete/location-autocomplete'
 import { LanguageAutocomplete } from '../autocomplete/language-autocomplete'
+import { ProximityAutocomplete } from '../autocomplete/proximity-autocomplete'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { FilterControlsProps, TimeType, TimeOfDay } from './types'
+import type { FilterControlsProps, TimeType, TimeOfDay, Location } from './types'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect, useMemo } from 'react'
@@ -10,8 +11,6 @@ import { toast } from '@/hooks/use-toast'
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { PRIORITY_COUNTRIES } from './index'
-import { languages, type TLanguageCode } from 'countries-list'
-import { getTimeType, getTimeOfDay } from './utils'
 import { useLocationState } from '@/hooks/use-location-state'
 
 interface AnimationConfig {
@@ -51,21 +50,31 @@ export function FilterControls({
   showAllCountries,
   onShowAllCountriesChange,
   scrollMode,
-  onScrollModeChange
-}: Omit<FilterControlsProps, 'selectedLanguage' | 'onLanguageChange'> & { animationConfig?: AnimationConfig }) {
+  onScrollModeChange,
+  selectedLocations = []
+}: Omit<FilterControlsProps, 'selectedLanguage' | 'onLanguageChange'> & { 
+  animationConfig?: AnimationConfig
+  selectedLocations?: Location[]
+}) {
   const [isSpinning, setIsSpinning] = useState(false)
   const [showReset, setShowReset] = useState(false)
-  const { selectedLanguages, setLanguages } = useLocationState()
+  const { selectedLanguages, setLanguages, removeSelectedTimezone } = useLocationState()
+
+  const handleLocationRemove = (location: Location) => {
+    const encoded = `${location.countryName}|${location.timezone}|${location.alternativeName}`
+    removeSelectedTimezone(encoded)
+  }
 
   // Check if any filters are active
   useEffect(() => {
     const hasActiveFilters = 
       selectedTimeType !== 'All' || 
       selectedTimeOfDay !== 'All' || 
-      selectedLanguages.length > 0
+      selectedLanguages.length > 0 ||
+      selectedLocations.length > 0
     
     setShowReset(hasActiveFilters)
-  }, [selectedTimeType, selectedTimeOfDay, selectedLanguages])
+  }, [selectedTimeType, selectedTimeOfDay, selectedLanguages, selectedLocations])
 
   const handleReset = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
@@ -76,10 +85,6 @@ export function FilterControls({
       description: "All filters have been reset to their default values",
     })
     setTimeout(() => setIsSpinning(false), 500)
-  }
-
-  const handleScrollModeChange = (showAll: boolean) => {
-    onScrollModeChange(showAll ? 'infinite' : 'pagination')
   }
 
   const formattedLanguages = useMemo(() => {
@@ -128,8 +133,11 @@ export function FilterControls({
             <LocationAutocomplete 
               locations={locations} 
               onSelect={onLocationChange}
+              onRemove={handleLocationRemove}
+              selectedLocations={selectedLocations}
+              maxSelections={3}
               initialLocation={locations.find(loc => loc.timezone === userTimezone?.name)}
-              aria-label="Select location"
+              aria-label="Select up to 3 timezones"
               showAllCountries={scrollMode === 'infinite'}
               priorityCountries={PRIORITY_COUNTRIES}
               className="w-full"
@@ -203,21 +211,12 @@ export function FilterControls({
             layout="position"
             layoutId="time-type-filter"
           >
-            <Select 
+            <ProximityAutocomplete 
               value={selectedTimeType} 
-              onValueChange={onTimeTypeChange}
+              onSelect={onTimeTypeChange}
               aria-label="Filter by proximity"
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Filter by Proximity" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Proximities</SelectItem>
-                <SelectItem value="Same Time">✅ Same Time</SelectItem>
-                <SelectItem value="Close Time">☑️ Close Time</SelectItem>
-                <SelectItem value="Reverse Time">😵‍💫 Reverse Time</SelectItem>
-              </SelectContent>
-            </Select>
+              className="w-full"
+            />
           </motion.div>
 
           <motion.div 

@@ -1,6 +1,6 @@
 {
   "name": "same-time",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "packageManager": "bun@1.3.5",
   "scripts": {
     "dev": "bun --bun next dev",
@@ -22,6 +22,8 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-toast": "^1.2.15",
+    "@tanstack/react-table": "^8.21.3",
+    "@tanstack/react-virtual": "^3.13.18",
     "@vvo/tzdb": "^6.198.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

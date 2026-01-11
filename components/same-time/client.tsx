@@ -62,6 +62,10 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
   )
 
   const [searchedCity, setSearchedCity] = useState<string | null>(null)
+  const [isDetectingTimezone, setIsDetectingTimezone] = useState<boolean>(() => {
+    // Show loading if initial timezone is the default (Africa/Abidjan)
+    return initialData.userTimezone?.name === 'Africa/Abidjan'
+  })
   
   // Use URL state directly - no local state needed
   const showAllCountries = urlShowAllCountries
@@ -143,18 +147,31 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
         if (!currentTimezone || currentTimezone === 'Africa/Abidjan' || currentTimezone !== detectedTimezone) {
           // Update cookie client-side without Server Action to prevent cache revalidation
           // This avoids triggering rebuild loops
+          // biome-ignore lint/security/noGlobalEval: Required for setting cookie before React hydration
           document.cookie = `timezone=${detectedTimezone}; max-age=${60 * 60 * 24 * 365}; path=/`
           
           // Fetch new data with detected timezone
           if (fetchAndUpdateLocationsRef.current) {
-            fetchAndUpdateLocationsRef.current(detectedTimezone, false)
+            fetchAndUpdateLocationsRef.current(detectedTimezone, false).then(() => {
+              // Hide loading state after data is fetched
+              setIsDetectingTimezone(false)
+            }).catch(() => {
+              // Hide loading state even on error
+              setIsDetectingTimezone(false)
+            })
+          } else {
+            setIsDetectingTimezone(false)
           }
+        } else {
+          // Timezone already matches, no need to fetch
+          setIsDetectingTimezone(false)
         }
       } catch (err) {
         console.error('Failed to detect timezone:', err)
+        setIsDetectingTimezone(false)
       }
     }, 0)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: Only run once on mount, use initialData from first render only
   }, []) // Empty array - only run once on mount. initialData checked on first render only.
 
   // Helper to check if location is user timezone
@@ -330,7 +347,7 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
       <div className="w-full max-w-5xl">
         <div className="flex flex-col items-center gap-4">
           <UserTimezoneInfo 
-            userTimezone={data.userTimezone} 
+            userTimezone={isDetectingTimezone ? null : data.userTimezone} 
             selectedLanguages={selectedLanguages}
             onToggleLanguage={toggleLanguage}
           />
@@ -359,6 +376,7 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
             availableTimesOfDay={availableTimesOfDay}
             selectedTimeType={selectedTimeType}
             selectedTimeOfDay={selectedTimeOfDay}
+            selectedLocations={selectedLocations}
             onLocationChange={handleLocationChange}
             onTimeTypeChange={handleTimeTypeChange}
             onTimeOfDayChange={handleTimeOfDayChange}

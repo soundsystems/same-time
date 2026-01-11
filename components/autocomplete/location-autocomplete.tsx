@@ -1,9 +1,10 @@
 import * as React from 'react'
 import type { Location, UserTimezone } from '@/components/same-time/types'
-import { Check, ChevronsUpDown } from "lucide-react"
+import { Check, ChevronsUpDown, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatTimezoneName } from '@/components/same-time/utils'
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
   Command,
   CommandEmpty,
@@ -21,6 +22,9 @@ import {
 interface LocationAutocompleteProps {
   locations: Location[]
   onSelect: (location: Location, searchedCity?: string) => void
+  onRemove?: (location: Location) => void
+  selectedLocations?: Location[]
+  maxSelections?: number
   initialLocation?: Location | UserTimezone
   showAllCountries?: boolean
   priorityCountries?: string[]
@@ -32,29 +36,42 @@ interface LocationAutocompleteProps {
 export const LocationAutocomplete = React.memo(function LocationAutocomplete({ 
   locations, 
   onSelect, 
+  onRemove,
+  selectedLocations = [],
+  maxSelections = 3,
+  // biome-ignore lint/complexity/noUnusedVariables: initialLocation kept for API compatibility
   initialLocation,
   name = "location",
   showAllCountries = false,
   priorityCountries = [],
   className,
-  'aria-label': ariaLabel = "Select location"
+  'aria-label': ariaLabel = "Select up to 3 timezones"
 }: LocationAutocompleteProps) {
   const [open, setOpen] = React.useState(false)
   const [value, setValue] = React.useState('')
 
-  // Memoize the initial state calculation
-  const initialLocationState = React.useMemo(() => {
-    if (!initialLocation) return null;
-    return {
-      ...initialLocation,
-      timezone: 'timezone' in initialLocation 
-        ? initialLocation.timezone 
-        : initialLocation.name
-    }
-  }, [initialLocation])
+  // Helper to check if location is selected
+  const isLocationSelected = React.useCallback((location: Location) => {
+    return selectedLocations.some(selected => 
+      selected.countryName === location.countryName &&
+      selected.timezone === location.timezone &&
+      selected.alternativeName === location.alternativeName
+    )
+  }, [selectedLocations])
 
-  const [selectedLocation, setSelectedLocation] = 
-    React.useState<Location | UserTimezone | null>(initialLocationState)
+  // Helper to get position-based badge color
+  const getBadgeColor = React.useCallback((index: number) => {
+    switch (index) {
+      case 0:
+        return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700'
+      case 1:
+        return 'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-700'
+      case 2:
+        return 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700'
+      default:
+        return 'bg-secondary text-secondary-foreground'
+    }
+  }, [])
 
   // Add highlight function
   const highlightMatch = (text: string, searchTerm: string) => {
@@ -121,22 +138,47 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
     const location = locations.find(loc => 
       `${loc.name}-${loc.alternativeName}-${loc.timezone}` === locationId
     )
-    if (location) {
-      // Find if there's a matching city in the search
-      let matchedCity: string | undefined
-      if (value) {
-        const searchTerm = value.toLowerCase()
-        matchedCity = location.mainCities.find(city => 
-          city.toLowerCase().includes(searchTerm)
-        )
-      }
-      
-      setSelectedLocation(location)
-      onSelect(location, matchedCity)
-      setOpen(false)
-      setValue('')
+    if (!location) {
+      return
     }
-  }, [locations, onSelect, value])
+
+    // Check if already selected - toggle behavior
+    const isSelected = isLocationSelected(location)
+    
+    if (isSelected) {
+      // Remove selection
+      if (onRemove) {
+        onRemove(location)
+      }
+      setValue('')
+      return
+    }
+
+    // Check if max selections reached
+    if (selectedLocations.length >= maxSelections) {
+      setValue('')
+      return
+    }
+
+    // Find if there's a matching city in the search
+    let matchedCity: string | undefined
+    if (value) {
+      const searchTerm = value.toLowerCase()
+      matchedCity = location.mainCities.find(city => 
+        city.toLowerCase().includes(searchTerm)
+      )
+    }
+    
+    onSelect(location, matchedCity)
+    setValue('')
+  }, [locations, onSelect, onRemove, value, isLocationSelected, selectedLocations.length, maxSelections])
+
+  const handleBadgeRemove = React.useCallback((e: React.MouseEvent, location: Location) => {
+    e.stopPropagation()
+    if (onRemove) {
+      onRemove(location)
+    }
+  }, [onRemove])
 
   return (
     <Popover 
@@ -149,23 +191,45 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
           role="combobox"
           aria-expanded={open}
           aria-label={ariaLabel}
-          className={cn("w-[400px] justify-between", className)}
+          className={cn("w-[400px] min-h-10 justify-between", className)}
           name={name}
         >
-          {selectedLocation ? (
-            <div className="flex items-center w-full justify-start">
-              <span className="mr-2 text-lg shrink-0">
-                {'emoji' in selectedLocation ? selectedLocation.emoji : '🌍'}
-              </span>
-              <span className="truncate flex-1 text-left">
-                {formatTimezoneName('timezone' in selectedLocation 
-                  ? selectedLocation.timezone 
-                  : selectedLocation.name)}
-              </span>
-            </div>
-          ) : (
-            <span className="fade-in text-left">Change Location...</span>
-          )}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {selectedLocations.length === 0 ? (
+              <span className="text-left text-muted-foreground">Select timezones... (0/{maxSelections})</span>
+            ) : (
+              <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+                {selectedLocations.map((location, index) => (
+                  <Badge
+                    key={`${location.countryName}-${location.timezone}-${location.alternativeName}`}
+                    variant="secondary"
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-0.5 text-xs font-medium",
+                      getBadgeColor(index)
+                    )}
+                  >
+                    <span className="text-sm">{location.emoji}</span>
+                    <span className="truncate max-w-[120px]">
+                      {formatTimezoneName(location.alternativeName)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleBadgeRemove(e, location)}
+                      className="ml-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5 transition-colors"
+                      aria-label={`Remove ${location.countryName}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                {selectedLocations.length < maxSelections && (
+                  <span className="text-xs text-muted-foreground">
+                    ({selectedLocations.length}/{maxSelections})
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -188,8 +252,8 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
               <CommandGroup>
                 {filteredLocations.map((location) => {
                   const locationId = `${location.name}-${location.alternativeName}-${location.timezone}`
-                  const isSelected = selectedLocation && 
-                    ('timezone' in selectedLocation ? selectedLocation.timezone : selectedLocation.name) === location.timezone
+                  const isSelected = isLocationSelected(location)
+                  const isMaxReached = selectedLocations.length >= maxSelections && !isSelected
                   
                   // Find the matching city if any
                   const matchingCityIndex = value ? 
@@ -209,7 +273,11 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
                       key={locationId}
                       value={locationId}
                       onSelect={() => handleSelect(locationId)}
-                      className="flex flex-col py-3 px-4 justify-start items-start"
+                      disabled={isMaxReached}
+                      className={cn(
+                        "flex flex-col py-3 px-4 justify-start items-start",
+                        isMaxReached && "opacity-50 cursor-not-allowed"
+                      )}
                     >
                       <div className="flex items-center gap-2 w-full justify-start">
                         <span className="text-lg shrink-0">{location.emoji}</span>
@@ -217,7 +285,10 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
                           {highlightMatch(formatTimezoneName(location.name), value)} ({highlightMatch(location.alternativeName, value)}), {highlightMatch(location.countryName, value)}
                         </span>
                         {isSelected && (
-                          <Check className="h-4 w-4 shrink-0" />
+                          <Check className="h-4 w-4 shrink-0 text-primary" />
+                        )}
+                        {isMaxReached && (
+                          <span className="text-xs text-muted-foreground">(Max {maxSelections} selected)</span>
                         )}
                       </div>
                       {orderedCities.length > 0 && (

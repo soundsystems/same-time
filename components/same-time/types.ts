@@ -77,6 +77,7 @@ export interface FilterControlsProps {
   onShowAllCountriesChange: (showAll: boolean) => void
   scrollMode: 'pagination' | 'infinite'
   onScrollModeChange: (mode: 'pagination' | 'infinite') => void
+  selectedLocations?: Location[]
 }
 
 export interface LocationsTableProps {
