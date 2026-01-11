@@ -61,7 +61,7 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
   const [showAllCountries, setShowAllCountries] = useState(false)
   const [scrollMode, setScrollMode] = useState<'pagination' | 'infinite'>('pagination')
   const [searchedCity, setSearchedCity] = useState<string | null>(null)
-  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null)
+  const [selectedLocations, setSelectedLocations] = useState<Location[]>([])
 
   // Track if timezone detection has run to avoid re-running
   const hasDetectedTimezone = useRef(false)
@@ -137,9 +137,56 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Empty array - only run once on mount. initialData checked on first render only.
 
+  // Helper to check if location is user timezone
+  const isUserTimezone = useCallback((location: Location) => {
+    if (!data.userTimezone) {
+      return false
+    }
+    return (
+      location.countryName === data.userTimezone.countryName &&
+      location.timezone === data.userTimezone.name &&
+      location.alternativeName === data.userTimezone.alternativeName
+    )
+  }, [data.userTimezone])
+
+  // Helper to check if two locations are the same
+  const isSameLocation = useCallback((loc1: Location, loc2: Location) => {
+    return (
+      loc1.countryName === loc2.countryName &&
+      loc1.timezone === loc2.timezone &&
+      loc1.alternativeName === loc2.alternativeName
+    )
+  }, [])
+
   const handleLocationChange = useCallback((location: Location, searchedCity?: string) => {
-    // Set the selected location for display
-    setSelectedLocation(location)
+    // If clicking user timezone, do nothing - it's always selected
+    if (isUserTimezone(location)) {
+      toast({
+        title: "Your Time Zone",
+        description: "This is your current timezone - it's always displayed",
+      })
+      return
+    }
+
+    // Update selected locations with priority ordering
+    setSelectedLocations(prev => {
+      // Check if already selected
+      const existingIndex = prev.findIndex(loc => isSameLocation(loc, location))
+      
+      if (existingIndex !== -1) {
+        // Already selected - move to front (make it priority)
+        return [location, ...prev.filter((_, i) => i !== existingIndex)]
+      }
+      
+      // New selection
+      if (prev.length >= 3) {
+        // Max reached - replace oldest (last in array)
+        return [location, prev[0], prev[1]]
+      }
+      
+      // Add to front
+      return [location, ...prev]
+    })
     
     // Batch URL updates to avoid History API throttling
     batchUpdate({ timeType: 'All', timeOfDay: 'All', page: 1 })
@@ -155,7 +202,16 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
       title: "Location Selected",
       description: `Viewing ${location.countryName} (${formatTimezoneName(location.alternativeName)})`,
     })
-  }, [batchUpdate, toast])
+  }, [batchUpdate, toast, isUserTimezone, isSameLocation])
+
+  // Handler to clear a specific selection
+  const handleClearSelection = useCallback((location: Location) => {
+    setSelectedLocations(prev => prev.filter(loc => !isSameLocation(loc, location)))
+    toast({
+      title: "Selection Cleared",
+      description: `Removed ${location.countryName}`,
+    })
+  }, [isSameLocation, toast])
 
   const handleReset = useCallback(() => {
     // Batch all URL state updates into a single call to avoid History API throttling
@@ -172,7 +228,7 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
     setSearchedCity(null)
     setShowAllCountries(false)
     setScrollMode('pagination')
-    setSelectedLocation(null)
+    setSelectedLocations([])
 
     if (languageAutocompleteRef.current) {
       languageAutocompleteRef.current.reset()
@@ -275,12 +331,18 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
         <div className="flex flex-col items-center gap-4">
           <UserTimezoneInfo userTimezone={data.userTimezone} />
           
-          <AnimatePresence>
-            {selectedLocation && (
-              <SelectedTimezoneInfo 
-                selectedLocation={selectedLocation}
-                onClear={() => setSelectedLocation(null)}
-              />
+          <AnimatePresence mode="popLayout">
+            {(selectedLocations || []).length > 0 && (
+              <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
+                {(selectedLocations || []).map((location, index) => (
+                  <SelectedTimezoneInfo 
+                    key={`${location.countryName}-${location.timezone}-${location.alternativeName}`}
+                    selectedLocation={location}
+                    position={index + 1}
+                    onClear={() => handleClearSelection(location)}
+                  />
+                ))}
+              </div>
             )}
           </AnimatePresence>
           
@@ -305,7 +367,7 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
         <LocationsTable 
           locations={data.locations}
           userTimezone={data.userTimezone}
-          selectedLocation={selectedLocation}
+          selectedLocations={selectedLocations}
           onLocationChangeAction={handleLocationChange}
           selectedTimeType={selectedTimeType}
           selectedTimeOfDay={selectedTimeOfDay}

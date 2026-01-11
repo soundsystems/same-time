@@ -32,7 +32,7 @@ import { useLocationState } from '@/hooks/use-location-state'
 interface LocationsTableProps {
   locations: Location[]
   userTimezone: UserTimezone | null
-  selectedLocation: Location | null
+  selectedLocations?: Location[]
   onLocationChangeAction: (location: Location) => void
   selectedTimeType: TimeType
   selectedTimeOfDay: TimeOfDay
@@ -150,7 +150,7 @@ function useIsMobile() {
 export default function LocationsTable({ 
   locations, 
   userTimezone,
-  selectedLocation,
+  selectedLocations = [],
   onLocationChangeAction,
   selectedTimeType: _selectedTimeType,
   selectedTimeOfDay: _selectedTimeOfDay,
@@ -161,6 +161,74 @@ export default function LocationsTable({
   searchedCity
 }: LocationsTableProps) {
   const isMobile = useIsMobile()
+
+  // Helper to check if location is user timezone
+  const isUserTimezone = useCallback((location: Location) => {
+    if (!userTimezone) {
+      return false
+    }
+    return (
+      location.countryName === userTimezone.countryName &&
+      location.timezone === userTimezone.name &&
+      location.alternativeName === userTimezone.alternativeName
+    )
+  }, [userTimezone])
+
+  // Helper to check if two locations are the same
+  const isSameLocation = useCallback((loc1: Location, loc2: Location) => {
+    return (
+      loc1.countryName === loc2.countryName &&
+      loc1.timezone === loc2.timezone &&
+      loc1.alternativeName === loc2.alternativeName
+    )
+  }, [])
+
+  // Helper to get location ID
+  const getLocationId = useCallback((location: Location) => {
+    return `${location.countryName}-${location.timezone}-${location.alternativeName}`
+  }, [])
+
+  // Helper to get language badge color based on priority
+  const getLanguageBadgeColor = useCallback((
+    languageCode: string,
+    languageName: string,
+    location: Location
+  ) => {
+    // Priority 1: Check if language matches user timezone
+    if (userTimezone?.languages.some(lang => {
+      const code = typeof lang === 'string' ? lang : lang.code
+      return code.toLowerCase() === languageCode.toLowerCase()
+    })) {
+      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+    }
+    
+    // Priority 2: Check if matches 1st selected timezone
+    if (selectedLocations && selectedLocations[0]?.languages.some(lang => {
+      const code = typeof lang === 'string' ? lang : lang.code
+      return code.toLowerCase() === languageCode.toLowerCase()
+    })) {
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+    }
+    
+    // Priority 3: Check if matches 2nd selected timezone
+    if (selectedLocations && selectedLocations[1]?.languages.some(lang => {
+      const code = typeof lang === 'string' ? lang : lang.code
+      return code.toLowerCase() === languageCode.toLowerCase()
+    })) {
+      return 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300'
+    }
+    
+    // Priority 4: Check if matches 3rd selected timezone
+    if (selectedLocations && selectedLocations[2]?.languages.some(lang => {
+      const code = typeof lang === 'string' ? lang : lang.code
+      return code.toLowerCase() === languageCode.toLowerCase()
+    })) {
+      return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+    }
+    
+    // No match: neutral gray
+    return 'bg-gray-100 text-gray-600 dark:bg-gray-800/30 dark:text-gray-400'
+  }, [userTimezone, selectedLocations])
   
   // Get all location state from useLocationState in a single call to prevent multiple hook instances
   const {
@@ -186,7 +254,7 @@ export default function LocationsTable({
   // Get filtered and sorted locations from the hook
   const filteredAndSortedLocations = useLocationFilters(locations, userTimezone)
 
-  // Filter and sort locations with selected location at top
+  // Filter and sort locations with selected locations at top in priority order
   const finalLocations = useMemo(() => {
     let filtered = showAllCountries 
       ? filteredAndSortedLocations 
@@ -194,36 +262,76 @@ export default function LocationsTable({
           priorityCountries.includes(location.countryName)
         )
 
-    // Move selected location to top if exists
-    if (selectedLocation) {
-      const selectedLocationId = `${selectedLocation.countryName}-${selectedLocation.timezone}-${selectedLocation.alternativeName}`
-      filtered = [
-        ...filtered.filter(loc => 
-          `${loc.countryName}-${loc.timezone}-${loc.alternativeName}` === selectedLocationId
-        ),
-        ...filtered.filter(loc => 
-          `${loc.countryName}-${loc.timezone}-${loc.alternativeName}` !== selectedLocationId
-        )
-      ]
+    // Create ordered list: selected locations first (in order), then user TZ, then rest
+    const orderedLocations: Location[] = []
+    const alreadyAdded = new Set<string>()
+
+    // 1. Add selected locations in priority order (newest first)
+    for (const selected of (selectedLocations || [])) {
+      const found = filtered.find(loc => isSameLocation(loc, selected))
+      if (found) {
+        orderedLocations.push(found)
+        alreadyAdded.add(getLocationId(found))
+      }
     }
 
-    // Push Antarctica to bottom
-    return [
-      ...filtered.filter(loc => loc.countryName !== 'Antarctica'),
-      ...filtered.filter(loc => loc.countryName === 'Antarctica')
-    ]
-  }, [filteredAndSortedLocations, showAllCountries, priorityCountries, selectedLocation])
+    // 2. Add user timezone if not already in selected
+    if (userTimezone) {
+      const userLoc = filtered.find(loc => isUserTimezone(loc))
+      if (userLoc && !alreadyAdded.has(getLocationId(userLoc))) {
+        orderedLocations.push(userLoc)
+        alreadyAdded.add(getLocationId(userLoc))
+      }
+    }
 
-  // Scroll selected location into view
+    // 3. Add remaining locations (excluding Antarctica for now)
+    const remaining = filtered.filter(loc => 
+      !alreadyAdded.has(getLocationId(loc)) && loc.countryName !== 'Antarctica'
+    )
+    
+    // 4. Add Antarctica at the end
+    const antarctica = filtered.filter(loc => 
+      !alreadyAdded.has(getLocationId(loc)) && loc.countryName === 'Antarctica'
+    )
+
+    return [...orderedLocations, ...remaining, ...antarctica]
+  }, [filteredAndSortedLocations, showAllCountries, priorityCountries, selectedLocations, userTimezone, isSameLocation, isUserTimezone, getLocationId])
+
+  // Scroll to user timezone on initial mount
   useEffect(() => {
-    if (selectedLocation) {
-      const selectedLocationId = `${selectedLocation.countryName}-${selectedLocation.timezone}-${selectedLocation.alternativeName}`
+    if (userTimezone) {
+      const userLocationId = getLocationId({ 
+        countryName: userTimezone.countryName,
+        timezone: userTimezone.name,
+        alternativeName: userTimezone.alternativeName,
+        countryCode: '',
+        currentTimeOffsetInMinutes: 0,
+        localHour: 0,
+        mainCities: [],
+        languages: [],
+        isSimilarTime: false
+      } as Location)
+      const element = document.getElementById(userLocationId)
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 100)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only on mount
+
+  // Scroll most recent selection into view when selections change
+  useEffect(() => {
+    if (selectedLocations && selectedLocations.length > 0) {
+      const mostRecent = selectedLocations[0]
+      const selectedLocationId = getLocationId(mostRecent)
       const element = document.getElementById(selectedLocationId)
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
     }
-  }, [selectedLocation])
+  }, [selectedLocations, getLocationId])
 
   // Update paginated items to use the page from URL
   const paginatedItems = useMemo(() => {
@@ -326,11 +434,26 @@ export default function LocationsTable({
               </TableHeader>
               <TableBody>
                 {displayedItems.map((location) => {
-                  const locationId = `${location.countryName}-${location.timezone}-${location.alternativeName}`
-                  const selectedLocationId = selectedLocation 
-                    ? `${selectedLocation.countryName}-${selectedLocation.timezone}-${selectedLocation.alternativeName}`
-                    : null
-                  const isSelected = locationId === selectedLocationId
+                  const locationId = getLocationId(location)
+                  
+                  // Check if it's user timezone
+                  const isUserTz = isUserTimezone(location)
+                  
+                  // Check if in selected array and get position
+                  const selectedIndex = (selectedLocations || []).findIndex(loc => isSameLocation(loc, location))
+                  const isSelected = selectedIndex !== -1 || isUserTz
+                  
+                  // Determine highlight color based on position
+                  let highlightColor = ''
+                  if (selectedIndex === 0) {
+                    highlightColor = 'bg-blue-100/50 dark:bg-blue-950/30'
+                  } else if (selectedIndex === 1) {
+                    highlightColor = 'bg-teal-100/50 dark:bg-teal-950/30'
+                  } else if (selectedIndex === 2) {
+                    highlightColor = 'bg-purple-100/50 dark:bg-purple-950/30'
+                  } else if (isUserTz) {
+                    highlightColor = 'bg-green-200/70 dark:bg-green-900/50'
+                  }
 
                   return (
                     <motion.tr
@@ -338,16 +461,20 @@ export default function LocationsTable({
                       key={locationId}
                       layout="position"
                       layoutId={`row-${locationId}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
                       transition={{ 
-                        layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 }
+                        opacity: { duration: 0.2 },
+                        layout: { duration: 0.25, ease: "easeInOut" }
                       }}
                       className={cn(
-                        "hover:bg-gray-100/50 cursor-pointer transition-colors py-2",
+                        "hover:bg-amber-100/60 dark:hover:bg-amber-900/40 cursor-pointer transition-colors py-2",
                         hasMatchingLanguage(
                           location.languages,
                           userTimezone?.languages ?? []
-                        ) && "bg-blue-50/30",
-                        isSelected && "bg-blue-100/50 font-semibold"
+                        ) && !isSelected && "bg-blue-50/30 dark:bg-blue-950/20",
+                        highlightColor,
+                        isSelected && "font-semibold"
                       )}
                       onClick={() => handleLocationSelect(location)}
                     >
@@ -430,7 +557,10 @@ export default function LocationsTable({
                                 >
                                   <div className="flex items-center text-xs text-gray-500">
                                     <CollapsibleTrigger asChild>
-                                      <div className="flex items-center gap-1 hover:text-gray-700 transition-colors cursor-pointer">
+                                      <div 
+                                        className="flex items-center gap-1 hover:text-gray-700 transition-colors cursor-pointer"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
                                         <motion.div
                                           animate={{ 
                                             rotate: openStates[locationId] ? 90 : 0 
@@ -457,9 +587,9 @@ export default function LocationsTable({
                                             {!openStates[locationId] && orderedCities.length > 1 && (
                                               <motion.span 
                                                 className="text-gray-400 text-[10px] shrink-0"
-                                                initial={{ opacity: 0, x: -10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                exit={{ opacity: 0, x: -10 }}
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
                                                 transition={{ duration: 0.2 }}
                                               >
                                                 +{orderedCities.length - 1} more
@@ -472,17 +602,17 @@ export default function LocationsTable({
                                   </div>
                                   <CollapsibleContent className="text-xs text-gray-500">
                                     <motion.div
-                                      initial={{ opacity: 0, height: 0 }}
-                                      animate={{ opacity: 1, height: "auto" }}
-                                      exit={{ opacity: 0, height: 0 }}
-                                      transition={{ duration: 0.2 }}
+                                      initial={{ opacity: 0 }}
+                                      animate={{ opacity: 1 }}
+                                      exit={{ opacity: 0 }}
+                                      transition={{ duration: 0.15 }}
                                     >
                                       {orderedCities.slice(1).map((city) => (
                                         <motion.div 
                                           key={city} 
                                           className="mt-1"
-                                          initial={{ opacity: 0, x: -10 }}
-                                          animate={{ opacity: 1, x: 0 }}
+                                          initial={{ opacity: 0 }}
+                                          animate={{ opacity: 1 }}
                                           transition={{ duration: 0.2 }}
                                         >
                                           {searchedCity && city.toLowerCase().includes(searchedCity.toLowerCase()) ? (
@@ -575,7 +705,10 @@ export default function LocationsTable({
                             >
                               <div className="flex items-center justify-center text-xs">
                                 <CollapsibleTrigger asChild>
-                                  <div className="flex items-center gap-1 hover:text-gray-700 transition-colors cursor-pointer">
+                                  <div 
+                                    className="flex items-center gap-1 hover:text-gray-700 transition-colors cursor-pointer"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
                                     {Array.from(new Set(location.languages)).length > 2 && (
                                       <motion.div
                                         animate={{ 
@@ -612,10 +745,7 @@ export default function LocationsTable({
                                             key={`${locationId}-${langCode}`}
                                             layout="preserve-aspect"
                                             className={`inline-block px-2 py-1 rounded-full text-xs md:text-sm ${
-                                              hasMatchingLanguage(
-                                                location.languages,
-                                                userTimezone?.languages ?? []
-                                              ) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                              getLanguageBadgeColor(langCode, langName, location)
                                             }`}
                                           >
                                             <span className={cn("hidden md:inline", isSelectedLang && "font-semibold")}>
@@ -631,9 +761,9 @@ export default function LocationsTable({
                                         {!openStates[`${locationId}-langs`] && Array.from(new Set(location.languages)).length > 2 && (
                                           <motion.span 
                                             className="text-gray-400 text-[10px] shrink-0"
-                                            initial={{ opacity: 0, x: -10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            exit={{ opacity: 0, x: -10 }}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
                                             transition={{ duration: 0.2 }}
                                           >
                                             +{Array.from(new Set(location.languages)).length - 2} more
@@ -646,10 +776,10 @@ export default function LocationsTable({
                               </div>
                               <CollapsibleContent className="text-xs">
                                 <motion.div
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: "auto" }}
-                                  exit={{ opacity: 0, height: 0 }}
-                                  transition={{ duration: 0.2 }}
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                  exit={{ opacity: 0 }}
+                                  transition={{ duration: 0.15 }}
                                   className="flex flex-wrap justify-center gap-1 mt-1"
                                 >
                                   {Array.from(new Set(location.languages))
@@ -676,14 +806,11 @@ export default function LocationsTable({
                                       <motion.span 
                                         key={`${locationId}-${langCode}`}
                                         layout="preserve-aspect"
-                                        initial={{ opacity: 0, x: -10 }}
-                                        animate={{ opacity: 1, x: 0 }}
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
                                         transition={{ duration: 0.2 }}
                                         className={`inline-block px-2 py-1 rounded-full text-xs md:text-sm ${
-                                          hasMatchingLanguage(
-                                            location.languages,
-                                            userTimezone?.languages ?? []
-                                          ) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                          getLanguageBadgeColor(langCode, langName, location)
                                         }`}
                                       >
                                         <span className={cn("hidden md:inline", isSelectedLang && "font-semibold")}>

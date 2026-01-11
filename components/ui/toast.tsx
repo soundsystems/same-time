@@ -45,7 +45,7 @@ const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
     VariantProps<typeof toastVariants>
->(({ className, variant, ...props }, ref) => {
+>(({ className, variant, children, ...props }, ref) => {
   const [isOpen, setIsOpen] = React.useState(false)
   const toastRef = React.useRef<HTMLLIElement>(null)
   
@@ -88,7 +88,9 @@ const Toast = React.forwardRef<
         }}
         exit={{ opacity: 0, x: '100%' }}
         transition={{ duration: 0.2 }}
-      />
+      >
+        {children}
+      </motion.li>
     </ToastPrimitives.Root>
   )
 })

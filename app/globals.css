@@ -186,7 +186,6 @@
   background-position: center;
   background-size: 150%;
   background-repeat: no-repeat;
-  border-radius: inherit;
   z-index: -1;
   animation: fade-in 1.2s ease-in-out;
 }
