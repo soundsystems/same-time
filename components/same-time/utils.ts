@@ -1,5 +1,5 @@
 import { formatInTimeZone } from 'date-fns-tz'
-import type { UserTimezone, TimeType, LanguageInfo } from './types'
+import type { TimeType, LanguageInfo } from './types'
 
 export function getTimeOfDay(hour: number): string {
   switch (true) {
@@ -26,7 +26,7 @@ export function getLocalTime(offsetInMinutes: number): string {
 
 export function getTimeType(
   offsetInMinutes: number, 
-  userOffsetInMinutes: UserTimezone['currentTimeOffsetInMinutes'], 
+  userOffsetInMinutes: number, 
   isSimilarTime: boolean
 ): string {
   const timeDiff = Math.abs((offsetInMinutes - userOffsetInMinutes) / 60)
@@ -60,12 +60,15 @@ export function getTypeColor(type: string): string {
 
 export function hasMatchingLanguage(
   locationLanguages: (string | LanguageInfo)[],
-  userLanguages: string[]
+  userLanguages: (string | LanguageInfo)[]
 ): boolean {
   const normalizedLocationLangs = locationLanguages.map(lang => 
     typeof lang === 'string' ? lang : lang.code
   )
-  return normalizedLocationLangs.some(lang => userLanguages.includes(lang))
+  const normalizedUserLangs = userLanguages.map(lang =>
+    typeof lang === 'string' ? lang : lang.code
+  )
+  return normalizedLocationLangs.some(lang => normalizedUserLangs.includes(lang))
 }
 
 export const formatTimeString = (timezone: string): `${number}:${number} ${'AM' | 'PM'}` => {

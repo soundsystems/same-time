@@ -4,17 +4,20 @@ import { useInView } from 'react-intersection-observer'
 interface UseInfiniteScrollProps<T> {
   items: T[]
   pageSize: number
+  isMobile?: boolean
 }
 
 export function useInfiniteScroll<T>({ 
   items,
-  pageSize
+  pageSize,
+  isMobile = false
 }: UseInfiniteScrollProps<T>) {
   const [numItemsToShow, setNumItemsToShow] = useState(pageSize)
   const [isLoading, setIsLoading] = useState(false)
   const { ref: loadMoreRef, inView } = useInView({
-    threshold: 0.1,
-    rootMargin: '100px 0px'
+    threshold: isMobile ? 0.25 : 0.1,
+    rootMargin: isMobile ? '50px 0px' : '100px 0px',
+    triggerOnce: false
   })
 
   useEffect(() => {
@@ -34,11 +37,10 @@ export function useInfiniteScroll<T>({
     if (!hasMore || isLoading) return
 
     setIsLoading(true)
-    setTimeout(() => {
-      setNumItemsToShow(prev => Math.min(prev + pageSize, items.length))
-      setIsLoading(false)
-    }, 100)
-  }, [hasMore, isLoading, items.length, pageSize])
+    const batchSize = isMobile ? Math.min(5, pageSize) : pageSize
+    setNumItemsToShow(prev => Math.min(prev + batchSize, items.length))
+    setIsLoading(false)
+  }, [hasMore, isLoading, items.length, pageSize, isMobile])
 
   const setInitialItems = useCallback((count: number) => {
     setNumItemsToShow(count)

@@ -1,10 +1,7 @@
-import { NextResponse } from 'next/server'
+import { cacheTag, cacheLife } from 'next/cache'
 import { getTimeZones, type TimeZone } from '@vvo/tzdb'
-import { countries, languages, type TLanguageCode, type TCountryCode } from 'countries-list'
-import { getTimeOfDay } from '@/components/same-time/utils'
+import { countries, languages, type TCountryCode, type TLanguageCode } from 'countries-list'
 import type { Location, LanguageInfo } from '@/components/same-time/types'
-
-export const dynamic = 'force-dynamic'
 
 const COUNTRY_LANGUAGES: Record<string, string[]> = {
   'AQ': ['en', 'es', 'ru'],
@@ -145,27 +142,37 @@ function mergeLocations(locations: Location[]) {
   return Array.from(merged.values())
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const timezone = searchParams.get('timezone')
-
-  if (!timezone) {
-    return NextResponse.json({ error: 'Missing timezone parameter' }, { status: 400 })
-  }
-
+export async function getLocationsData(timezone: string) {
+  'use cache'
+  // Normalize and validate timezone
+  const normalizedTimezone = timezone?.trim() || 'UTC'
+  cacheTag('locations', `tz-${normalizedTimezone}`)
+  cacheLife('minutes') // Cache for a few minutes
+  
   const allTimezones = getTimeZones()
-  const userTimezone = allTimezones.find(tz => tz.name === timezone)
-
+  const userTimezone = allTimezones.find(tz => tz.name === normalizedTimezone)
+  
   if (!userTimezone) {
-    return NextResponse.json({ error: 'Invalid timezone' }, { status: 400 })
+    // Fallback to UTC-equivalent timezone (offset 0) if timezone not found
+    const utcTimezone = allTimezones.find(tz => tz.currentTimeOffsetInMinutes === 0) || allTimezones[0]
+    if (!utcTimezone) {
+      throw new Error('Invalid timezone and UTC fallback failed')
+    }
+    const utcLocations = allTimezones
+      .map(tz => processTimezone(tz, utcTimezone))
+      .filter((tz): tz is Location => tz !== null)
+    return {
+      locations: mergeLocations(utcLocations),
+      userTimezone: processTimezone(utcTimezone),
+    }
   }
 
   const locations = allTimezones
     .map(tz => processTimezone(tz, userTimezone))
     .filter((tz): tz is Location => tz !== null)
 
-  return NextResponse.json({
+  return {
     locations: mergeLocations(locations),
-    userTimezone: processTimezone(userTimezone)
-  })
+    userTimezone: processTimezone(userTimezone),
+  }
 }

@@ -1,40 +1,38 @@
 'use client'
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Loader } from "@/components/ui/loader"
 import ReactCountryFlag from "react-country-flag"
 import type { Location, UserTimezone, TimeType, TimeOfDay, SortField } from './types'
 import { 
-  getTimeOfDay, 
-  getLocalTime, 
   getTimeType, 
   getTimeBadge, 
   getTypeColor, 
-  hasMatchingLanguage 
+  hasMatchingLanguage,
+  formatTimezoneName
 } from './utils'
 import { cn } from "@/lib/utils"
-import { useOptimistic } from 'react'
 import { AnimatePresence, motion } from "motion/react"
 import { useInfiniteScroll } from '@/hooks/use-infinite-scroll'
 import { CircleArrowUp } from 'lucide-react'
-import { Button } from "@/components/ui/button"
-import { languages, type TLanguageCode, type TLanguages } from 'countries-list'
+import { languages, type TLanguageCode } from 'countries-list'
 import { 
   Collapsible, 
   CollapsibleContent, 
   CollapsibleTrigger 
 } from "@/components/ui/collapsible"
-import { ChevronRight, ChevronDown } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { LocationPagination } from './pagination'
 import { TimeDisplay } from './time-display'
-import { useLocationFilters } from '@/lib/hooks/useLocationFilters'
-import { useLocationState } from '@/lib/hooks/useLocationState'
+import { useLocationFilters } from '@/hooks/use-location-filters'
+import { useLocationState } from '@/hooks/use-location-state'
 
 interface LocationsTableProps {
   locations: Location[]
   userTimezone: UserTimezone | null
+  selectedLocation: Location | null
   onLocationChangeAction: (location: Location) => void
   selectedTimeType: TimeType
   selectedTimeOfDay: TimeOfDay
@@ -45,21 +43,7 @@ interface LocationsTableProps {
   searchedCity: string | null
 }
 
-// Add priority countries array
-const PRIORITY_COUNTRIES = [
-  'Albania', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Belarus', 'Belgium',
-  'Bosnia and Herzegovina', 'Brazil', 'Bulgaria', 'Canada', 'Chile', 'China',
-  'Colombia', 'Croatia', 'Czechia', 'Denmark', 'Finland', 'France', 'Germany',
-  'Greece', 'Hungary', 'India', 'Indonesia', 'Ireland', 'Israel', 'Italy',
-  'Japan', 'Kazakhstan', 'Korea', 'Latvia', 'Lithuania', 'Luxembourg',
-  'Malaysia', 'Mexico', 'Moldova', 'Netherlands', 'New Zealand', 'North Macedonia',
-  'Norway', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Romania', 'Russia',
-  'Serbia', 'Slovakia', 'Slovenia', 'South Africa', 'Spain', 'Sweden',
-  'Switzerland', 'Taiwan', 'Thailand', 'Turkey', 'Ukraine', 'United Kingdom',
-  'United States', 'Venezuela'
-]
-
-// Add this utility function at the top
+// Throttle utility function
 const throttle = <T extends (...args: unknown[]) => void>(func: T, limit: number): T => {
   let inThrottle = false
   return ((...args: Parameters<T>) => {
@@ -74,48 +58,130 @@ const throttle = <T extends (...args: unknown[]) => void>(func: T, limit: number
 }
 
 // Add utility function for truncating city names
-const truncateCityName = (city: string, wordLimit = 2) => {
+const truncateCityName = (city: string) => {
+  // If city contains a hyphen, take only the first part
+  if (city.includes('-')) {
+    return `${city.split('-')[0]}...`
+  }
+  // Otherwise keep the original truncation logic
   const words = city.split(' ')
-  if (words.length <= wordLimit) return city
-  return words.slice(0, wordLimit).join(' ') + '...'
+  if (words.length <= 2) return city
+  return `${words.slice(0, 2).join(' ')}...`
+}
+
+const getMobileCountryName = (countryName: string) => {
+  let name = countryName
+
+  // Handle all Saint abbreviations first
+  if (name.startsWith('Saint ')) {
+    name = name.replace('Saint ', 'St. ')
+  }
+
+  // Handle directional abbreviations
+  name = name
+    .replace(/Northern /g, 'N. ')
+    .replace(/North /g, 'N. ')
+    .replace(/Southern /g, 'S. ')
+    .replace(/South /g, 'S. ')
+    .replace(/French /g, 'Fr. ')
+
+  // Special cases
+  if (name === 'United States') return 'USA'
+  if (name === 'Democratic Republic of the Congo') return 'DRC'
+  if (name === 'Republic of the Congo') return 'ROC'
+  if (name === 'Central African Republic') return 'CAR'
+  if (name === 'The Netherlands') return 'Netherlands'
+  if (name === 'United Arab Emirates') return 'UAE'
+  if (name === 'N. Macedonia') return 'NMK'
+  if (name === 'Palestinian Territory') return 'Palestine'
+  if (name === 'United States Minor Outlying Islands') return 'USMOI'
+  if (name === 'British Virgin Islands') return 'Virgin Isl.'
+  if (name === 'U.S. Virgin Islands') return 'US Virgin Isl.'
+  if (name === 'British Indian Ocean Territory') return 'Indian Ocean'
+  if (name === 'Equatorial Guinea') return 'GNQ'
+  if (name === 'Fr. S. Territories') return 'TF'
+  if (name === 'United Kingdom') return 'UK'
+  if (name === 'American Samoa') return 'Am. Samoa'
+  if (name === 'Dominican Republic') return 'Dominican'
+  if (name === 'St. Barthelemy') return "St. Bart's"
+  if (name === 'Christmas Island') return 'X-Mas Island'
+  if (name === 'Papua New Guinea') return 'PNG'
+  if (name === 'Burkina Faso') return 'BF'
+  if (name === 'New Caledonia') return 'New Cal.'
+  if (name === 'Luxembourg') return 'LUX'
+
+  // Handle Islands abbreviation
+  if (name.includes('Islands')) {
+    name = name.replace('Islands', 'Isl.')
+  }
+
+  // If country has commas, take first part
+  if (name.includes(',')) {
+    return name.split(',')[0].trim()
+  }
+  // If country has 'and', take first part
+  if (name.includes(' and ')) {
+    return name.split(' and ')[0].trim()
+  }
+  // If no special cases apply, return full name
+  return name
+}
+
+// Add useIsMobile hook
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' && window.innerWidth <= 768
+  )
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
+  return isMobile
 }
 
 export default function LocationsTable({ 
   locations, 
   userTimezone,
+  selectedLocation,
   onLocationChangeAction,
-  selectedTimeType,
-  selectedTimeOfDay,
+  selectedTimeType: _selectedTimeType,
+  selectedTimeOfDay: _selectedTimeOfDay,
   showAllCountries,
   priorityCountries,
   scrollMode = 'pagination',
   onScrollModeChange,
   searchedCity
 }: LocationsTableProps) {
-  // Get language state from useLocationState
-  const { selectedLanguage } = useLocationState()
+  const isMobile = useIsMobile()
+  
+  // Get all location state from useLocationState in a single call to prevent multiple hook instances
+  const {
+    selectedLanguage,
+    page,
+    setPage,
+    sortField,
+    setSortField,
+    sortDirection,
+    setSortDirection
+  } = useLocationState()
 
   // 1. All useState hooks
-  const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(10)
-  const [showPagination, setShowPagination] = useState(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
-  const [isOpen, setIsOpen] = useState(false)
   const [openStates, setOpenStates] = useState<Record<string, boolean>>({})
-  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
 
   // Function to handle location selection
   const handleLocationSelect = useCallback((location: Location) => {
-    setSelectedLocationId(`${location.countryName}-${location.timezone}-${location.alternativeName}`)
     onLocationChangeAction(location)
   }, [onLocationChangeAction])
-
-  // Set initial selected location ID from userTimezone
-  useEffect(() => {
-    if (userTimezone && 'countryName' in userTimezone && 'timezone' in userTimezone && 'alternativeName' in userTimezone) {
-      setSelectedLocationId(`${userTimezone.countryName}-${userTimezone.timezone}-${userTimezone.alternativeName}`)
-    }
-  }, [userTimezone])
 
   // Get filtered and sorted locations from the hook
   const filteredAndSortedLocations = useLocationFilters(locations, userTimezone)
@@ -129,7 +195,8 @@ export default function LocationsTable({
         )
 
     // Move selected location to top if exists
-    if (selectedLocationId) {
+    if (selectedLocation) {
+      const selectedLocationId = `${selectedLocation.countryName}-${selectedLocation.timezone}-${selectedLocation.alternativeName}`
       filtered = [
         ...filtered.filter(loc => 
           `${loc.countryName}-${loc.timezone}-${loc.alternativeName}` === selectedLocationId
@@ -140,55 +207,48 @@ export default function LocationsTable({
       ]
     }
 
-    return filtered
-  }, [filteredAndSortedLocations, showAllCountries, priorityCountries, selectedLocationId])
+    // Push Antarctica to bottom
+    return [
+      ...filtered.filter(loc => loc.countryName !== 'Antarctica'),
+      ...filtered.filter(loc => loc.countryName === 'Antarctica')
+    ]
+  }, [filteredAndSortedLocations, showAllCountries, priorityCountries, selectedLocation])
 
   // Scroll selected location into view
   useEffect(() => {
-    if (selectedLocationId) {
+    if (selectedLocation) {
+      const selectedLocationId = `${selectedLocation.countryName}-${selectedLocation.timezone}-${selectedLocation.alternativeName}`
       const element = document.getElementById(selectedLocationId)
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
     }
-  }, [selectedLocationId])
+  }, [selectedLocation])
 
-  // 2. useOptimistic hook
-  const [optimisticUserTimezone, setOptimisticUserTimezone] = useOptimistic(
-    userTimezone,
-    (state, newTimezone: UserTimezone) => ({
-      ...state,
-      ...newTimezone
-    })
-  )
-
-  // 3. useCallback hooks
-  const getMatchingLanguagesCount = useCallback((locationLanguages: string[]) => {
-    if (!userTimezone?.languages) return 0
-    const userLangSet = new Set(userTimezone.languages)
-    return locationLanguages.filter(lang => userLangSet.has(lang)).length
-  }, [userTimezone?.languages])
-
-  const totalPages = Math.ceil(finalLocations.length / itemsPerPage)
-
-  // Get paginated items
+  // Update paginated items to use the page from URL
   const paginatedItems = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage
+    const startIndex = (page - 1) * itemsPerPage
     return finalLocations.slice(startIndex, startIndex + itemsPerPage)
-  }, [currentPage, itemsPerPage, finalLocations])
+  }, [page, itemsPerPage, finalLocations])
+
+  // Update pagination handler
+  const handlePageChange = useCallback((newPage: number) => {
+    setPage(newPage)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [setPage])
 
   // Add infinite scroll hook
   const {
     items: infiniteScrollItems,
     hasMore,
     isLoading: isLoadingMore,
-    loadMore,
     loadMoreRef,
     reset: resetInfiniteScroll,
     setInitialItems
   } = useInfiniteScroll({
     items: finalLocations,
-    pageSize: itemsPerPage
+    pageSize: itemsPerPage,
+    isMobile
   })
 
   // Handle scroll mode change
@@ -199,9 +259,9 @@ export default function LocationsTable({
       // Then change the mode
       onScrollModeChange('infinite')
       // Reset page to 1
-      setCurrentPage(1)
+      setPage(1)
     }
-  }, [onScrollModeChange, setInitialItems, finalLocations.length])
+  }, [onScrollModeChange, setInitialItems, finalLocations.length, setPage])
 
   // Reset infinite scroll only when filters change, not on mode change
   useEffect(() => {
@@ -213,60 +273,9 @@ export default function LocationsTable({
   // Display items based on scroll mode
   const displayedItems = scrollMode === 'infinite' ? infiniteScrollItems : paginatedItems
 
-  // Pagination helpers
-  const paginate = (pageNumber: number) => setCurrentPage(pageNumber)
-
-  const getPageNumbers = () => {
-    const pages: number[] = []
-    
-    // Show all pages if 6 or fewer
-    if (totalPages <= 6) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1)
-    }
-
-    // Always show first page
-    pages.push(1)
-
-    // Calculate range after current page (show next 4 pages)
-    const afterCurrent = Math.min(currentPage + 4, totalPages - 1)
-    
-    // If we're near the start, show more pages before ellipsis
-    if (currentPage <= 3) {
-      for (let i = 2; i <= afterCurrent; i++) {
-        pages.push(i)
-      }
-      if (afterCurrent < totalPages - 1) {
-        pages.push(-1) // ellipsis
-      }
-    } 
-    // If we're near the end, show more pages after ellipsis
-    else if (currentPage > totalPages - 4) {
-      pages.push(-1) // ellipsis
-      for (let i = totalPages - 4; i < totalPages; i++) {
-        pages.push(i)
-      }
-    } 
-    // In the middle, show ellipsis on both sides
-    else {
-      pages.push(-1) // first ellipsis
-      for (let i = currentPage; i <= afterCurrent; i++) {
-        pages.push(i)
-      }
-      if (afterCurrent < totalPages - 1) {
-        pages.push(-1) // second ellipsis
-      }
-    }
-
-    // Always show last page
-    pages.push(totalPages)
-
-    return pages
-  }
-
   // Watch for all countries toggle - separate from scroll mode
-  useEffect(() => {
-    setCurrentPage(1) // Only reset pagination when switching country filter mode
-  }, []) // Run only on mount since we just want to ensure we start at page 1
+  // Note: Page defaults to 1 via URL parser, so this effect is not needed
+  // Removed to prevent unnecessary re-renders
 
   // Add scroll listener
   useEffect(() => {
@@ -282,23 +291,12 @@ export default function LocationsTable({
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  // Add these calculations near the other pagination-related code
-  const indexOfLastItem = currentPage * itemsPerPage
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage
-
-  const getCityDisplay = (city: string) => {
-    return city.replace(/\([^)]*\)/g, '').trim()
-  }
-
-  // Add sorting state from useLocationState
-  const { sortField, setSortField, sortDirection, setSortDirection } = useLocationState()
-
   // Add back handleSort using the state from useLocationState
   const handleSort = useCallback((field: SortField) => {
-    setCurrentPage(1)
+    setPage(1)
     setSortDirection(sortField === field && sortDirection === 'asc' ? 'desc' : 'asc')
     setSortField(field)
-  }, [sortField, sortDirection, setSortDirection, setSortField, setCurrentPage])
+  }, [sortField, sortDirection, setSortDirection, setSortField, setPage])
 
   return (
     <div className="relative">
@@ -329,6 +327,9 @@ export default function LocationsTable({
               <TableBody>
                 {displayedItems.map((location) => {
                   const locationId = `${location.countryName}-${location.timezone}-${location.alternativeName}`
+                  const selectedLocationId = selectedLocation 
+                    ? `${selectedLocation.countryName}-${selectedLocation.timezone}-${selectedLocation.alternativeName}`
+                    : null
                   const isSelected = locationId === selectedLocationId
 
                   return (
@@ -338,11 +339,10 @@ export default function LocationsTable({
                       layout="position"
                       layoutId={`row-${locationId}`}
                       transition={{ 
-                        layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 },
-                        delay: indexOfFirstItem * 0.05
+                        layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 }
                       }}
                       className={cn(
-                        "hover:bg-gray-100/50 cursor-pointer transition-colors",
+                        "hover:bg-gray-100/50 cursor-pointer transition-colors py-2",
                         hasMatchingLanguage(
                           location.languages,
                           userTimezone?.languages ?? []
@@ -354,17 +354,14 @@ export default function LocationsTable({
                       <motion.td 
                         layout="position" 
                         layoutId={`country-${locationId}`}
-                        className="text-left min-w-0"
+                        className="text-left min-w-0 pl-1 pr-0 md:px-4"
                       >
                         <div className="flex flex-col items-start w-full min-w-0">
                           <div className="flex items-center gap-2 min-w-0">
-                            <motion.div layout="preserve-aspect" className="flex-shrink-0">
+                            <motion.div layout="preserve-aspect" className="shrink-0 w-6 h-6">
                               <ReactCountryFlag
                                 countryCode={location.countryCode}
-                                style={{
-                                  width: '1.5em',
-                                  height: '1.5em'
-                                }}
+                                className="w-full h-full"
                                 svg
                               />
                             </motion.div>
@@ -374,17 +371,15 @@ export default function LocationsTable({
                             )}>
                               <span className="truncate">
                                 <span className="md:hidden">
-                                  {location.countryName === 'United States' ? 'USA' : 
-                                   location.countryName === 'Bosnia and Herzegovina' ? 'Bosnia' :
-                                   location.countryName}
+                                  {getMobileCountryName(location.countryName)}
                                 </span>
                                 <span className="hidden md:inline">{location.countryName}</span>
                               </span>
                               <span className={cn(
-                                "text-sm text-gray-500 hidden md:inline truncate",
+                                "text-xs text-gray-500 hidden md:inline truncate",
                                 isSelected && "font-semibold"
                               )}>
-                                {location.alternativeName}
+                                {formatTimezoneName(location.alternativeName)}
                               </span>
                             </motion.span>
                           </div>
@@ -461,7 +456,7 @@ export default function LocationsTable({
                                           <AnimatePresence mode="wait">
                                             {!openStates[locationId] && orderedCities.length > 1 && (
                                               <motion.span 
-                                                className="text-gray-400 text-[10px] flex-shrink-0"
+                                                className="text-gray-400 text-[10px] shrink-0"
                                                 initial={{ opacity: 0, x: -10 }}
                                                 animate={{ opacity: 1, x: 0 }}
                                                 exit={{ opacity: 0, x: -10 }}
@@ -506,7 +501,7 @@ export default function LocationsTable({
                       <motion.td 
                         layout="position" 
                         layoutId={`time-${locationId}`}
-                        className="text-center"
+                        className="text-center px-0.5 md:px-4"
                       >
                         <motion.div layout="preserve-aspect" className={cn(isSelected && "font-semibold")}>
                           <TimeDisplay offsetInMinutes={location.currentTimeOffsetInMinutes} />
@@ -520,12 +515,12 @@ export default function LocationsTable({
                       <motion.td 
                         layout="position" 
                         layoutId={`type-${locationId}`}
-                        className="text-center"
+                        className="text-center px-0.5 md:px-4"
                       >
                         <motion.span 
                           layout="preserve-aspect"
                           className={cn(
-                            `px-2 py-1 rounded-full text-sm whitespace-normal`,
+                            "px-2 py-1 rounded-full text-xs md:text-sm whitespace-normal",
                             getTypeColor(getTimeType(
                               location.currentTimeOffsetInMinutes,
                               userTimezone?.currentTimeOffsetInMinutes || 0,
@@ -562,7 +557,7 @@ export default function LocationsTable({
                       <motion.td 
                         layout="position" 
                         layoutId={`languages-${locationId}`}
-                        className="text-center"
+                        className="text-center pl-0 pr-1 md:px-4"
                       >
                         <motion.div 
                           layout="position"
@@ -603,7 +598,7 @@ export default function LocationsTable({
                                           return aCode.localeCompare(bCode);
                                         })
                                         .slice(0, 2)
-                                        .map((lang, index) => {
+                                        .map((lang) => {
                                         const langCode = typeof lang === 'string' ? lang : lang.code
                                         const langName = typeof lang === 'string' 
                                           ? languages[lang as TLanguageCode]?.name || lang 
@@ -616,7 +611,7 @@ export default function LocationsTable({
                                           <motion.span 
                                             key={`${locationId}-${langCode}`}
                                             layout="preserve-aspect"
-                                            className={`inline-block px-2 py-1 rounded-full text-sm ${
+                                            className={`inline-block px-2 py-1 rounded-full text-xs md:text-sm ${
                                               hasMatchingLanguage(
                                                 location.languages,
                                                 userTimezone?.languages ?? []
@@ -635,7 +630,7 @@ export default function LocationsTable({
                                       <AnimatePresence mode="wait">
                                         {!openStates[`${locationId}-langs`] && Array.from(new Set(location.languages)).length > 2 && (
                                           <motion.span 
-                                            className="text-gray-400 text-[10px] flex-shrink-0"
+                                            className="text-gray-400 text-[10px] shrink-0"
                                             initial={{ opacity: 0, x: -10 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             exit={{ opacity: 0, x: -10 }}
@@ -684,7 +679,7 @@ export default function LocationsTable({
                                         initial={{ opacity: 0, x: -10 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`inline-block px-2 py-1 rounded-full text-sm ${
+                                        className={`inline-block px-2 py-1 rounded-full text-xs md:text-sm ${
                                           hasMatchingLanguage(
                                             location.languages,
                                             userTimezone?.languages ?? []
@@ -720,8 +715,10 @@ export default function LocationsTable({
                 className="mt-4"
               >
                 <LocationPagination 
+                  currentPage={page}
                   totalItems={finalLocations.length}
                   itemsPerPage={itemsPerPage}
+                  onPageChange={handlePageChange}
                   onShowAll={handleShowAll}
                 />
               </motion.div>
@@ -761,9 +758,8 @@ export default function LocationsTable({
               scale: { type: "spring", stiffness: 200, damping: 25 }
             }}
             onClick={scrollToTop}
-            className="fixed bottom-8 right-8 bg-black text-white rounded-full px-6 py-2 flex items-center gap-2 shadow-lg hover:bg-gray-800 transition-colors z-50"
+            className="fixed bottom-8 right-8 bg-black text-white rounded-full px-6 py-2 flex items-center gap-2 shadow-lg hover:bg-gray-800 transition-colors z-50 will-change-[transform,opacity]"
             aria-label="Scroll to top"
-            style={{ willChange: 'transform, opacity' }}
           >
             <CircleArrowUp className="h-5 w-4" />
             <span className="text-sm font-medium">Back to top</span>

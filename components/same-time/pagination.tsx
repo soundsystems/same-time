@@ -1,134 +1,133 @@
 'use client'
 
-import { useLocationState } from '@/lib/hooks/useLocationState'
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination"
 import { Button } from "@/components/ui/button"
-import { motion, AnimatePresence } from "motion/react"
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
-interface LocationPaginationProps {
+export interface LocationPaginationProps {
   totalItems: number
   itemsPerPage: number
-  onShowAll?: () => void
+  onShowAll: () => void
+  onPageChange: (page: number) => void
+  currentPage: number
 }
 
 export function LocationPagination({ 
-  totalItems,
-  itemsPerPage,
-  onShowAll
+  totalItems, 
+  itemsPerPage, 
+  onShowAll,
+  onPageChange,
+  currentPage
 }: LocationPaginationProps) {
-  const { page, setPage } = useLocationState()
   const totalPages = Math.ceil(totalItems / itemsPerPage)
 
-  const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setPage(newPage)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+  const handlePrevious = () => {
+    if (currentPage > 1) {
+      onPageChange(currentPage - 1)
     }
   }
 
-  if (totalPages <= 1) return null
-
-  const getPageNumbers = () => {
-    const pages: Array<{ type: 'page' | 'ellipsis', value: number }> = []
-    const showEllipsisStart = page > 2
-    const showEllipsisEnd = page < totalPages - 1
-
-    if (totalPages <= 5) {
-      return Array.from({ length: totalPages }, (_, i) => ({
-        type: 'page',
-        value: i + 1
-      }))
+  const handleNext = () => {
+    if (currentPage < totalPages) {
+      onPageChange(currentPage + 1)
     }
+  }
 
-    // Always show first page
-    pages.push({ type: 'page', value: 1 })
-
-    if (showEllipsisStart) {
-      pages.push({ type: 'ellipsis', value: 1 }) // Use index as value for ellipsis
+  const getVisiblePages = () => {
+    // Calculate pages to show - always up to 8 for desktop
+    const maxVisiblePages = 8
+    
+    // If total pages is less than or equal to max visible, show all
+    if (totalPages <= maxVisiblePages) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1)
     }
-
-    // Show current page and adjacent pages
-    for (let i = Math.max(2, page - 1); i <= Math.min(page + 1, totalPages - 1); i++) {
-      pages.push({ type: 'page', value: i })
+    
+    const pages: (number | string)[] = []
+    
+    // Determine the range of pages to show
+    let startPage: number
+    let endPage: number
+    
+    if (currentPage <= maxVisiblePages) {
+      // Near the beginning: show pages 1 through maxVisiblePages
+      startPage = 1
+      endPage = maxVisiblePages
+    } else {
+      // Show pages around currentPage
+      const halfRange = Math.floor((maxVisiblePages - 1) / 2)
+      startPage = Math.max(1, currentPage - halfRange)
+      endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+      
+      // Adjust if we went past the end
+      if (endPage === totalPages) {
+        startPage = Math.max(1, totalPages - maxVisiblePages + 1)
+        endPage = totalPages
+      }
     }
-
-    if (showEllipsisEnd) {
-      pages.push({ type: 'ellipsis', value: 2 }) // Use different index for end ellipsis
+    
+    // Add the page numbers
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i)
     }
-
-    if (totalPages > 1) {
-      pages.push({ type: 'page', value: totalPages })
+    
+    // Add ellipsis after the last visible page if there are more pages
+    if (endPage < totalPages) {
+      pages.push('ellipsis')
     }
-
+    
     return pages
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="flex flex-col items-center gap-4"
-    >
-      <Pagination>
-        <PaginationContent>
-          <PaginationItem>
-            <PaginationPrevious 
-              href="#" 
-              onClick={(e) => {
-                e.preventDefault()
-                handlePageChange(page - 1)
-              }}
-            />
-          </PaginationItem>
-
-          {getPageNumbers().map((item, index) => (
-            <PaginationItem key={item.type === 'ellipsis' ? `ellipsis-${item.value}` : `page-${item.value}`}>
-              {item.type === 'ellipsis' ? (
-                <PaginationEllipsis />
-              ) : (
-                <PaginationLink
-                  href="#"
-                  isActive={item.value === page}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    handlePageChange(item.value)
-                  }}
-                >
-                  {item.value}
-                </PaginationLink>
-              )}
-            </PaginationItem>
-          ))}
-
-          <PaginationItem>
-            <PaginationNext 
-              href="#" 
-              onClick={(e) => {
-                e.preventDefault()
-                handlePageChange(page + 1)
-              }}
-            />
-          </PaginationItem>
-        </PaginationContent>
-      </Pagination>
-
-      {onShowAll && (
+    <div className="flex flex-col items-center gap-4">
+      <div className="flex items-center gap-2">
         <Button
-          variant="default"
-          className="bg-blue-500 hover:bg-blue-600 text-white"
-          onClick={onShowAll}
+          variant="outline"
+          onClick={handlePrevious}
+          disabled={currentPage === 1}
+          size="icon"
+          className="h-8 w-8"
         >
-          Load All Results
+          <ChevronLeft className="h-4 w-4" />
+          <span className="sr-only">Previous page</span>
+        </Button>
+        <div className="flex items-center [&>*:nth-child(n+4)]:hidden [&>*:nth-child(n+6)]:md:inline-flex [&>*:nth-child(n+6)]:lg:inline-flex">
+          {getVisiblePages().map((pageNum, index) => 
+            pageNum === 'ellipsis' ? (
+              <span 
+                key={`ellipsis-${index}`} 
+                className="px-2 hidden md:inline-block"
+              >
+                ...
+              </span>
+            ) : (
+              <Button
+                key={pageNum}
+                variant={pageNum === currentPage ? "default" : "ghost"}
+                onClick={() => onPageChange(pageNum as number)}
+                className="h-8 w-8 p-0"
+                size="sm"
+              >
+                {pageNum}
+              </Button>
+            )
+          )}
+        </div>
+        <Button
+          variant="outline"
+          onClick={handleNext}
+          disabled={currentPage === totalPages}
+          size="icon"
+          className="h-8 w-8"
+        >
+          <ChevronRight className="h-4 w-4" />
+          <span className="sr-only">Next page</span>
+        </Button>
+      </div>
+      {totalPages > 1 && (
+        <Button variant="outline" onClick={onShowAll}>
+          Load All
         </Button>
       )}
-    </motion.div>
+    </div>
   )
 } 

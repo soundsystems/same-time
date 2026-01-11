@@ -1,18 +1,25 @@
+"use client"
+
 import { Loader } from "@/components/ui/loader"
 import { TableSkeleton } from "@/components/same-time/table-skeleton"
+import { motion } from "motion/react"
 
 export function LoadingPage() {
   return (
     <div className="mt-8">
       <div className="flex flex-col space-y-4 mb-4">
         <div className="font-mono space-y-2">
-          <div className="animate-pulse space-y-2">
+          <motion.div
+            className="space-y-2"
+            animate={{ opacity: [1, 0.5, 1] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          >
             <div className="h-4 w-48 bg-muted rounded" />
             <div className="h-4 w-32 bg-muted rounded" />
             <div className="h-4 w-40 bg-muted rounded" />
             <div className="h-4 w-36 bg-muted rounded" />
             <div className="h-4 w-52 bg-muted rounded" />
-          </div>
+          </motion.div>
         </div>
         <div className="flex items-center justify-center space-x-4">
           <div className="w-[400px] h-10 bg-muted rounded" />

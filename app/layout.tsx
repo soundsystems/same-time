@@ -19,8 +19,8 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Time Zone Matcher",
-  description: "Find locations in similar time zones",
+  title: "Same Time | Time Zone Matcher",
+  description: "Get on the same time as your friends, family, and colleagues",
 }
 
 export default function RootLayout({

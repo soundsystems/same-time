@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { PRIORITY_COUNTRIES } from './index'
 import { languages, type TLanguageCode } from 'countries-list'
 import { getTimeType, getTimeOfDay } from './utils'
-import { useLocationState } from '@/lib/hooks/useLocationState'
+import { useLocationState } from '@/hooks/use-location-state'
 
 interface AnimationConfig {
   duration: number
@@ -55,7 +55,7 @@ export function FilterControls({
 }: Omit<FilterControlsProps, 'selectedLanguage' | 'onLanguageChange'> & { animationConfig?: AnimationConfig }) {
   const [isSpinning, setIsSpinning] = useState(false)
   const [showReset, setShowReset] = useState(false)
-  const { selectedLanguage, setSelectedLanguage } = useLocationState()
+  const { selectedLanguage, setLanguage } = useLocationState()
 
   // Check if any filters are active
   useEffect(() => {
@@ -171,7 +171,7 @@ export function FilterControls({
             <LanguageAutocomplete 
               ref={languageAutocompleteRef}
               languages={formattedLanguages}
-              onSelect={setSelectedLanguage}
+              onSelect={setLanguage}
               initialValue={selectedLanguage}
               aria-label="Filter by language" 
               className="w-full"
@@ -211,7 +211,7 @@ export function FilterControls({
                 <SelectValue placeholder="Filter by Time Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="All">All Types</SelectItem>
+                <SelectItem value="All">All Proximities</SelectItem>
                 <SelectItem value="Same Time">Same Time</SelectItem>
                 <SelectItem value="Close Time">Close Time</SelectItem>
                 <SelectItem value="Reverse Time">Reverse Time</SelectItem>
@@ -233,7 +233,7 @@ export function FilterControls({
                 <SelectValue placeholder="Filter by Time of Day" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="All">All Times</SelectItem>
+                <SelectItem value="All">All Times of Day</SelectItem>
                 {availableTimesOfDay.map(timeOfDay => (
                   <SelectItem key={timeOfDay} value={timeOfDay}>
                     {timeOfDay}

@@ -1,8 +1,11 @@
+"use client"
+
 import { cn } from "@/lib/utils"
 import { cva, type VariantProps } from "class-variance-authority"
+import { motion } from "motion/react"
 
 const loaderVariants = cva(
-  "animate-spin rounded-full border-current",
+  "rounded-full border-current",
   {
     variants: {
       variant: {
@@ -32,20 +35,34 @@ export function Loader({ className, variant, size, dots, ...props }: LoaderProps
   if (dots) {
     return (
       <div className="flex space-x-1.5" {...props}>
-        <div className="h-2 w-2 animate-loader-bounce rounded-full bg-current" />
-        <div className="h-2 w-2 animate-loader-bounce rounded-full bg-current [animation-delay:0.2s]" />
-        <div className="h-2 w-2 animate-loader-bounce rounded-full bg-current [animation-delay:0.4s]" />
+        <motion.div
+          className="h-2 w-2 rounded-full bg-current"
+          animate={{ y: [0, -8, 0] }}
+          transition={{ duration: 0.6, repeat: Infinity, ease: "easeInOut", delay: 0 }}
+        />
+        <motion.div
+          className="h-2 w-2 rounded-full bg-current"
+          animate={{ y: [0, -8, 0] }}
+          transition={{ duration: 0.6, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
+        />
+        <motion.div
+          className="h-2 w-2 rounded-full bg-current"
+          animate={{ y: [0, -8, 0] }}
+          transition={{ duration: 0.6, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+        />
         <span className="sr-only">Loading...</span>
       </div>
     )
   }
 
   return (
-    <div
+    <motion.div
       className={cn(loaderVariants({ variant, size }), className)}
+      animate={{ rotate: 360 }}
+      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
       {...props}
     >
       <span className="sr-only">Loading...</span>
-    </div>
+    </motion.div>
   )
 }

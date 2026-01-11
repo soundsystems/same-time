@@ -54,7 +54,7 @@ export type SortField = 'country' | 'type'
 export interface UserTimezone {
   name: string
   currentTimeOffsetInMinutes: number
-  languages: string[]
+  languages: (string | LanguageInfo)[]
 }
 
 export interface FilterControlsProps {

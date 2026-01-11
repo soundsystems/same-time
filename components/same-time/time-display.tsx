@@ -13,7 +13,7 @@ export function TimeDisplay({ offsetInMinutes }: TimeDisplayProps) {
   const timeOfDay = getTimeOfDay(rawHours)
 
   return (
-    <div>
+    <div className='text-xs md:text-sm'>
       <NumberFlowGroup>
         <span className="md:hidden">
           <NumberFlow 
@@ -46,7 +46,7 @@ export function TimeDisplay({ offsetInMinutes }: TimeDisplayProps) {
           <span> {isAM ? 'AM' : 'PM'}</span>
         </span>
       </NumberFlowGroup>
-      <div className="text-sm text-gray-500 whitespace-nowrap">
+      <div className="text-xs text-gray-500 whitespace-nowrap">
         <span className="md:hidden text-xs">
           {timeOfDay === 'Early Morning' ? 'Early' : 
            timeOfDay === 'Late Night' ? 'Late' : 

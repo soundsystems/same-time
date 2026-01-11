@@ -14,7 +14,7 @@ export function TableSkeleton() {
       </TableHeader>
       <TableBody>
         {[...Array(5)].map((_, i) => (
-          <TableRow key={`skeleton-row-${Date.now()}-${i}`}>
+          <TableRow key={`skeleton-row-${i}`}>
             <TableCell>
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">

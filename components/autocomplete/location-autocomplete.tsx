@@ -2,6 +2,7 @@ import * as React from 'react'
 import type { Location, UserTimezone } from '@/components/same-time/types'
 import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { formatTimezoneName } from '@/components/same-time/utils'
 import { Button } from "@/components/ui/button"
 import {
   Command,
@@ -55,39 +56,20 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
   const [selectedLocation, setSelectedLocation] = 
     React.useState<Location | UserTimezone | null>(initialLocationState)
 
-  // Add match scoring function
-  const getMatchScore = (location: Location, searchTerm: string) => {
-    // Direct matches get highest priority
-    if (location.name.toLowerCase() === searchTerm) return 100
-    if (location.alternativeName.toLowerCase() === searchTerm) return 90
-    if (location.countryName.toLowerCase() === searchTerm) return 80
-
-    // Partial matches get lower scores
-    if (location.name.toLowerCase().includes(searchTerm)) return 70
-    if (location.alternativeName.toLowerCase().includes(searchTerm)) return 60
-    if (location.countryName.toLowerCase().includes(searchTerm)) return 50
-
-    // Check city matches
-    const cityIndex = location.mainCities.findIndex(city => 
-      city.toLowerCase().includes(searchTerm)
-    )
-    if (cityIndex === 0) return 40 // First city match
-    if (cityIndex > 0) return 30 - cityIndex // Later city matches get progressively lower scores
-
-    return 0
-  }
-
   // Add highlight function
   const highlightMatch = (text: string, searchTerm: string) => {
     if (!searchTerm) return text
     const parts = text.split(new RegExp(`(${searchTerm})`, 'gi'))
+    let position = 0
     return (
       <>
-        {parts.map((part, i) => 
-          part.toLowerCase() === searchTerm.toLowerCase() ? (
-            <span key={i} className="font-bold">{part}</span>
+        {parts.map(part => {
+          const currentPosition = position
+          position += part.length
+          return part.toLowerCase() === searchTerm.toLowerCase() ? (
+            <span key={`${part}-${currentPosition}`} className="font-bold">{part}</span>
           ) : part
-        )}
+        })}
       </>
     )
   }
@@ -99,13 +81,26 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
     // First filter by search query if one exists
     if (value) {
       const searchTerm = value.toLowerCase()
+      
+      // Define match scoring function inside
+      const getMatchScore = (location: Location, term: string) => {
+        if (location.name.toLowerCase() === term) return 100
+        if (location.alternativeName.toLowerCase() === term) return 90
+        if (location.countryName.toLowerCase() === term) return 80
+        if (location.name.toLowerCase().includes(term)) return 70
+        if (location.alternativeName.toLowerCase().includes(term)) return 60
+        if (location.countryName.toLowerCase().includes(term)) return 50
+        const cityIndex = location.mainCities.findIndex(city => city.toLowerCase().includes(term))
+        if (cityIndex === 0) return 40
+        if (cityIndex > 0) return 30 - cityIndex
+        return 0
+      }
+
       filtered = filtered.filter(location => (
         location.name.toLowerCase().includes(searchTerm) ||
         location.alternativeName.toLowerCase().includes(searchTerm) ||
         location.countryName.toLowerCase().includes(searchTerm) ||
-        location.mainCities.some(city => 
-          city.toLowerCase().includes(searchTerm)
-        )
+        location.mainCities.some(city => city.toLowerCase().includes(searchTerm))
       ))
       // Sort results to prioritize matches
       filtered.sort((a, b) => {
@@ -116,9 +111,7 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
     } 
     // Only apply priority filter if there's no search term
     else if (!showAllCountries) {
-      filtered = filtered.filter(location => 
-        priorityCountries.includes(location.countryName)
-      )
+      filtered = filtered.filter(location => priorityCountries.includes(location.countryName))
     }
     
     return filtered
@@ -160,18 +153,18 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
           name={name}
         >
           {selectedLocation ? (
-            <div className="flex items-center w-full">
+            <div className="flex items-center w-full justify-start">
               <span className="mr-2 text-lg shrink-0">
                 {'emoji' in selectedLocation ? selectedLocation.emoji : '🌍'}
               </span>
-              <span className="truncate flex-1">
-                {('timezone' in selectedLocation 
+              <span className="truncate flex-1 text-left">
+                {formatTimezoneName('timezone' in selectedLocation 
                   ? selectedLocation.timezone 
-                  : selectedLocation.name).replace(/_/g, ' ')}
+                  : selectedLocation.name)}
               </span>
             </div>
           ) : (
-            "Change Location..."
+            <span className="fade-in text-left">Change Location...</span>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -216,12 +209,12 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
                       key={locationId}
                       value={locationId}
                       onSelect={() => handleSelect(locationId)}
-                      className="flex flex-col py-3 px-4"
+                      className="flex flex-col py-3 px-4 justify-start items-start"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{location.emoji}</span>
-                        <span className="flex-1">
-                          {highlightMatch(location.name.replace(/_/g, ' '), value)} ({highlightMatch(location.alternativeName, value)}), {highlightMatch(location.countryName, value)}
+                      <div className="flex items-center gap-2 w-full justify-start">
+                        <span className="text-lg shrink-0">{location.emoji}</span>
+                        <span className="flex-1 text-left">
+                          {highlightMatch(formatTimezoneName(location.name), value)} ({highlightMatch(location.alternativeName, value)}), {highlightMatch(location.countryName, value)}
                         </span>
                         {isSelected && (
                           <Check className="h-4 w-4 shrink-0" />

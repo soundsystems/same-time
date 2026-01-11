@@ -138,10 +138,14 @@ export const LanguageAutocomplete = React.forwardRef<
           aria-label={ariaLabel}
           className={cn("w-[200px] justify-between", className)}
         >
-          {selectedLanguage === 'All' ? 'All Languages' : 
-            formattedLanguages.find(l => l.code === selectedLanguage)?.display || 
-            selectedLanguage
-          }
+          {selectedLanguage === 'All' ? (
+            <span className="fade-in text-left">All Languages</span>
+          ) : (
+            <span className="text-left">
+              {formattedLanguages.find(l => l.code === selectedLanguage)?.display || 
+              selectedLanguage}
+            </span>
+          )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
