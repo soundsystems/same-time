@@ -233,11 +233,12 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent 
-        className="w-[400px] p-0" 
-        side="bottom" 
+      <PopoverContent
+        className="w-[400px] p-0"
+        side="bottom"
         align="start"
         sideOffset={4}
+        avoidCollisions={false}
       >
         <Command shouldFilter={false}>
           <CommandInput 
