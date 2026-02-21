@@ -68,6 +68,8 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
         return 'bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-700'
       case 2:
         return 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700'
+      case 3:
+        return 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700'
       default:
         return 'bg-secondary text-secondary-foreground'
     }
@@ -245,7 +247,7 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
             value={value}
             onValueChange={setValue}
           />
-          <CommandList className="max-h-[300px] overflow-y-auto">
+          <CommandList className="max-h-[256px] md:max-h-[300px] overflow-y-auto">
             {filteredLocations.length === 0 ? (
               <CommandEmpty>No locations found.</CommandEmpty>
             ) : (

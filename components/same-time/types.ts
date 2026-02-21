@@ -63,12 +63,12 @@ export interface FilterControlsProps {
   locations: Location[]
   userTimezone: UserTimezone | null
   availableLanguages: (string | LanguageInfo)[]
-  selectedTimeType: TimeType
-  selectedTimeOfDay: TimeOfDay
+  selectedTimeTypes: TimeType[]
+  selectedTimesOfDay: TimeOfDay[]
   selectedLanguage: string
   onLocationChange: (location: Location) => void
-  onTimeTypeChange: (type: TimeType) => void
-  onTimeOfDayChange: (timeOfDay: TimeOfDay) => void
+  onTimeTypesChange: (types: TimeType[]) => void
+  onTimesOfDayChange: (timesOfDay: TimeOfDay[]) => void
   onLanguageChange: (language: string) => void
   availableTimesOfDay: TimeOfDay[]
   onReset: () => void
@@ -84,8 +84,8 @@ export interface LocationsTableProps {
   locations: Location[]
   userTimezone: UserTimezone | null
   onLocationChangeAction: (location: Location, searchedCity?: string) => void
-  selectedTimeType: TimeType
-  selectedTimeOfDay: TimeOfDay
+  selectedTimeTypes: TimeType[]
+  selectedTimesOfDay: TimeOfDay[]
   showAllCountries: boolean
   priorityCountries: string[]
   scrollMode: 'pagination' | 'infinite'

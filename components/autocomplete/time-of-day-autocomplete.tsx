@@ -16,71 +16,58 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useState, useMemo } from 'react'
-import type { TimeType } from '@/components/same-time/types'
+import type { TimeOfDay } from '@/components/same-time/types'
 
-interface ProximityAutocompleteProps {
-  values: TimeType[]
-  onSelect: (values: TimeType[]) => void
+interface TimeOfDayAutocompleteProps {
+  availableTimesOfDay: TimeOfDay[]
+  values: TimeOfDay[]
+  onSelect: (values: TimeOfDay[]) => void
   'aria-label'?: string
   className?: string
   placeholder?: string
 }
 
-interface ProximityOption {
-  value: TimeType
-  label: string
-  display: string
+const TIME_OF_DAY_EMOJIS: Record<TimeOfDay, string> = {
+  'Early Morning': '🌅',
+  'Morning': '☀️',
+  'Afternoon': '🌤️',
+  'Evening': '🌆',
+  'Night': '🌙',
+  'Late Night': '🌃',
 }
 
-const PROXIMITY_OPTIONS: ProximityOption[] = [
-  { value: 'Same Time', label: 'Same Time', display: '✅ Same Time' },
-  { value: 'Close Time', label: 'Close Time', display: '☑️ Close Time' },
-  { value: 'Reverse Time', label: 'Reverse Time', display: '😵‍💫 Reverse Time' },
-]
-
-export const ProximityAutocomplete = React.forwardRef<
-  { reset: () => void },
-  ProximityAutocompleteProps
->(function ProximityAutocomplete({
+export function TimeOfDayAutocomplete({
+  availableTimesOfDay,
   values,
   onSelect,
-  'aria-label': ariaLabel = "Filter by proximity",
+  'aria-label': ariaLabel = "Filter by time of day",
   className,
-  placeholder = "All Proximities",
-}, ref) {
+  placeholder = "All Times of Day",
+}: TimeOfDayAutocompleteProps) {
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
 
-  React.useImperativeHandle(ref, () => ({
-    reset: () => {
-      setSearchValue('')
-      onSelect([])
-      setOpen(false)
-    }
-  }))
-
   const filteredOptions = useMemo(() => {
-    if (!searchValue) return PROXIMITY_OPTIONS
-    return PROXIMITY_OPTIONS.filter(option =>
-      option.label.toLowerCase().includes(searchValue.toLowerCase()) ||
-      option.display.toLowerCase().includes(searchValue.toLowerCase())
+    if (!searchValue) return availableTimesOfDay
+    return availableTimesOfDay.filter(tod =>
+      tod.toLowerCase().includes(searchValue.toLowerCase())
     )
-  }, [searchValue])
+  }, [availableTimesOfDay, searchValue])
 
-  const handleToggle = (value: TimeType) => {
-    const isSelected = values.includes(value)
+  const handleToggle = (tod: TimeOfDay) => {
+    const isSelected = values.includes(tod)
     if (isSelected) {
-      onSelect(values.filter(v => v !== value))
+      onSelect(values.filter(v => v !== tod))
     } else {
-      onSelect([...values, value])
+      onSelect([...values, tod])
     }
   }
 
   const triggerLabel = values.length === 0
     ? placeholder
     : values.length === 1
-      ? PROXIMITY_OPTIONS.find(o => o.value === values[0])?.display ?? values[0]
-      : `${values.length} proximities`
+      ? `${TIME_OF_DAY_EMOJIS[values[0]]} ${values[0]}`
+      : `${values.length} times of day`
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -89,7 +76,6 @@ export const ProximityAutocomplete = React.forwardRef<
           type="button"
           variant="outline"
           aria-expanded={open}
-          aria-controls="proximity-search"
           aria-haspopup="listbox"
           aria-label={ariaLabel}
           className={cn("w-full justify-between", className)}
@@ -98,16 +84,16 @@ export const ProximityAutocomplete = React.forwardRef<
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[210px] p-0">
+      <PopoverContent className="w-[220px] p-0">
         <Command>
           <CommandInput
-            placeholder="Search proximity..."
+            placeholder="Search times of day..."
             value={searchValue}
             onValueChange={setSearchValue}
           />
-          <CommandList className="max-h-[200px] overflow-y-auto">
+          <CommandList className="max-h-[240px] overflow-y-auto">
             {filteredOptions.length === 0 ? (
-              <CommandEmpty>No proximity types found.</CommandEmpty>
+              <CommandEmpty>No times found.</CommandEmpty>
             ) : (
               <>
                 {values.length > 0 && (
@@ -117,18 +103,18 @@ export const ProximityAutocomplete = React.forwardRef<
                       className="text-destructive"
                     >
                       <X className="mr-2 h-4 w-4" />
-                      Clear all proximities
+                      Clear all times
                     </CommandItem>
                   </CommandGroup>
                 )}
                 <CommandGroup>
-                  {filteredOptions.map((option) => {
-                    const isSelected = values.includes(option.value)
+                  {filteredOptions.map((tod) => {
+                    const isSelected = values.includes(tod)
                     return (
                       <CommandItem
-                        key={option.value}
-                        value={option.label}
-                        onSelect={() => handleToggle(option.value)}
+                        key={tod}
+                        value={tod}
+                        onSelect={() => handleToggle(tod)}
                       >
                         <Check
                           className={cn(
@@ -136,7 +122,9 @@ export const ProximityAutocomplete = React.forwardRef<
                             isSelected ? "opacity-100" : "opacity-0"
                           )}
                         />
-                        <span className="flex-1">{option.display}</span>
+                        <span className="flex-1">
+                          {TIME_OF_DAY_EMOJIS[tod]} {tod}
+                        </span>
                       </CommandItem>
                     )
                   })}
@@ -148,6 +136,6 @@ export const ProximityAutocomplete = React.forwardRef<
       </PopoverContent>
     </Popover>
   )
-})
+}
 
-ProximityAutocomplete.displayName = 'ProximityAutocomplete'
+TimeOfDayAutocomplete.displayName = 'TimeOfDayAutocomplete'

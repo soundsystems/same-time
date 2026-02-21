@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { Location, UserTimezone } from '@/components/same-time/types'
+import type { Location, UserTimezone, TimeType, TimeOfDay } from '@/components/same-time/types'
 import { getTimeType, getTimeOfDay } from '@/components/same-time/utils'
 import { useLocationState } from './use-location-state'
 
@@ -8,10 +8,10 @@ export function useLocationFilters(
   userTimezone: UserTimezone | null,
   selectedLocations: Location[] = []
 ) {
-  const { 
-    selectedLanguages, 
-    selectedTimeType, 
-    selectedTimeOfDay,
+  const {
+    selectedLanguages,
+    selectedTimeTypes,
+    selectedTimesOfDay,
     sortField,
     sortDirection
   } = useLocationState()
@@ -31,9 +31,9 @@ export function useLocationFilters(
       )
     }
 
-    // Filter by time type (proximity) if selected
-    // Check if location matches proximity to ANY of the selected timezones (user + 1-3 selections)
-    if (selectedTimeType !== 'All') {
+    // Filter by time type (proximity) if any selected (OR logic)
+    // Check if location matches proximity to ANY of the selected timezones (user + selections)
+    if (selectedTimeTypes.length > 0) {
       filtered = filtered.filter(location => {
         // Check against user timezone
         const typeVsUser = getTimeType(
@@ -41,7 +41,7 @@ export function useLocationFilters(
           userTimezone?.currentTimeOffsetInMinutes || 0,
           location.isSimilarTime
         )
-        if (typeVsUser === selectedTimeType) {
+        if (selectedTimeTypes.includes(typeVsUser as TimeType)) {
           return true
         }
 
@@ -52,7 +52,7 @@ export function useLocationFilters(
             selected.currentTimeOffsetInMinutes,
             location.isSimilarTime
           )
-          if (typeVsSelected === selectedTimeType) {
+          if (selectedTimeTypes.includes(typeVsSelected as TimeType)) {
             return true
           }
         }
@@ -61,11 +61,11 @@ export function useLocationFilters(
       })
     }
 
-    // Filter by time of day if selected
-    if (selectedTimeOfDay !== 'All') {
+    // Filter by time of day if any selected (OR logic)
+    if (selectedTimesOfDay.length > 0) {
       filtered = filtered.filter(location => {
         const timeOfDay = getTimeOfDay(location.localHour)
-        return timeOfDay === selectedTimeOfDay
+        return selectedTimesOfDay.includes(timeOfDay as TimeOfDay)
       })
     }
 
@@ -127,5 +127,5 @@ export function useLocationFilters(
     }
 
     return filtered
-  }, [locations, selectedLanguages, selectedTimeType, selectedTimeOfDay, userTimezone, sortField, sortDirection, selectedLocations])
+  }, [locations, selectedLanguages, selectedTimeTypes, selectedTimesOfDay, userTimezone, sortField, sortDirection, selectedLocations])
 } 

@@ -1,7 +1,7 @@
 import { LocationAutocomplete } from '../autocomplete/location-autocomplete'
 import { LanguageAutocomplete } from '../autocomplete/language-autocomplete'
 import { ProximityAutocomplete } from '../autocomplete/proximity-autocomplete'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { TimeOfDayAutocomplete } from '../autocomplete/time-of-day-autocomplete'
 import type { FilterControlsProps, TimeType, TimeOfDay, Location } from './types'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -32,11 +32,11 @@ export function FilterControls({
   locations,
   userTimezone,
   availableLanguages,
-  selectedTimeType,
-  selectedTimeOfDay,
+  selectedTimeTypes,
+  selectedTimesOfDay,
   onLocationChange,
-  onTimeTypeChange,
-  onTimeOfDayChange,
+  onTimeTypesChange,
+  onTimesOfDayChange,
   availableTimesOfDay,
   onReset,
   languageAutocompleteRef,
@@ -52,7 +52,7 @@ export function FilterControls({
   scrollMode,
   onScrollModeChange,
   selectedLocations = []
-}: Omit<FilterControlsProps, 'selectedLanguage' | 'onLanguageChange'> & { 
+}: Omit<FilterControlsProps, 'selectedLanguage' | 'onLanguageChange'> & {
   animationConfig?: AnimationConfig
   selectedLocations?: Location[]
 }) {
@@ -67,14 +67,14 @@ export function FilterControls({
 
   // Check if any filters are active
   useEffect(() => {
-    const hasActiveFilters = 
-      selectedTimeType !== 'All' || 
-      selectedTimeOfDay !== 'All' || 
+    const hasActiveFilters =
+      selectedTimeTypes.length > 0 ||
+      selectedTimesOfDay.length > 0 ||
       selectedLanguages.length > 0 ||
       selectedLocations.length > 0
-    
+
     setShowReset(hasActiveFilters)
-  }, [selectedTimeType, selectedTimeOfDay, selectedLanguages, selectedLocations])
+  }, [selectedTimeTypes, selectedTimesOfDay, selectedLanguages, selectedLocations])
 
   const handleReset = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
@@ -100,55 +100,58 @@ export function FilterControls({
   const validTimeTypes: TimeType[] = ['All', 'Same Time', 'Close Time', 'Reverse Time']
   const validTimeOfDay: TimeOfDay[] = ['All', 'Early Morning', 'Morning', 'Afternoon', 'Evening', 'Night', 'Late Night']
 
-  if (!validTimeTypes.includes(selectedTimeType) || !validTimeOfDay.includes(selectedTimeOfDay)) {
+  if (
+    !selectedTimeTypes.every(t => validTimeTypes.includes(t)) ||
+    !selectedTimesOfDay.every(t => validTimeOfDay.includes(t))
+  ) {
     return null
   }
 
   // 4. render
   return (
     <LayoutGroup id="filter-controls">
-      <motion.form 
+      <motion.form
         className="grid grid-cols-1 gap-4 w-full max-w-screen-lg mx-auto"
         aria-label="Filter locations"
         layout="size"
         layoutId="filter-form"
-        transition={{ 
+        transition={{
           layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 }
         }}
       >
         {/* Top row - Location selector with toggle on larger screens */}
-        <motion.div 
+        <motion.div
           className="flex flex-col md:flex-row md:items-center"
           layout="position"
           layoutId="top-row"
-          transition={{ 
+          transition={{
             layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 }
           }}
         >
-          <motion.div 
+          <motion.div
             className="flex-1 md:mr-4"
             layout="size"
             layoutId="location-autocomplete"
           >
-            <LocationAutocomplete 
-              locations={locations} 
+            <LocationAutocomplete
+              locations={locations}
               onSelect={onLocationChange}
               onRemove={handleLocationRemove}
               selectedLocations={selectedLocations}
-              maxSelections={3}
+              maxSelections={4}
               initialLocation={locations.find(loc => loc.timezone === userTimezone?.name)}
-              aria-label="Select up to 3 timezones"
+              aria-label="Select up to 4 timezones"
               showAllCountries={scrollMode === 'infinite'}
               priorityCountries={PRIORITY_COUNTRIES}
               className="w-full"
             />
           </motion.div>
-          <motion.div 
+          <motion.div
             className="hidden md:flex items-center gap-2"
             layout="position"
             layoutId="desktop-toggle"
           >
-            <Label 
+            <Label
               htmlFor="show-all-countries-desktop"
               className="text-sm text-gray-500 whitespace-nowrap"
             >
@@ -163,37 +166,37 @@ export function FilterControls({
         </motion.div>
 
         {/* Bottom row - Other filters */}
-        <motion.div 
+        <motion.div
           className="grid grid-cols-1 md:grid-cols-3 gap-4"
           layout="position"
           layoutId="bottom-row"
-          transition={{ 
+          transition={{
             layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 }
           }}
         >
-          <motion.div 
+          <motion.div
             className="flex items-center gap-4"
             layout="position"
             layoutId="language-filter"
           >
-            <LanguageAutocomplete 
+            <LanguageAutocomplete
               ref={languageAutocompleteRef}
               languages={formattedLanguages}
               onSelect={setLanguages}
               selectedLanguages={selectedLanguages}
-              maxSelections={8}
-              aria-label="Filter by languages" 
+              maxSelections={6}
+              aria-label="Filter by languages"
               className="w-full"
               placeholder="All Languages"
               mobilePlaceholder="All Langs"
             />
             {/* Show toggle only on mobile */}
-            <motion.div 
+            <motion.div
               className="md:hidden flex items-center gap-2"
               layout="position"
               layoutId="mobile-toggle"
             >
-              <Label 
+              <Label
                 htmlFor="show-all-countries-mobile"
                 className="text-sm text-gray-500 whitespace-nowrap"
               >
@@ -207,40 +210,30 @@ export function FilterControls({
             </motion.div>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             layout="position"
             layoutId="time-type-filter"
           >
-            <ProximityAutocomplete 
-              value={selectedTimeType} 
-              onSelect={onTimeTypeChange}
+            <ProximityAutocomplete
+              values={selectedTimeTypes}
+              onSelect={onTimeTypesChange}
               aria-label="Filter by proximity"
               className="w-full"
             />
           </motion.div>
 
-          <motion.div 
+          <motion.div
             className="flex items-center gap-4"
             layout="position"
             layoutId="time-of-day-filter"
           >
-            <Select 
-              value={selectedTimeOfDay} 
-              onValueChange={onTimeOfDayChange}
+            <TimeOfDayAutocomplete
+              availableTimesOfDay={availableTimesOfDay}
+              values={selectedTimesOfDay}
+              onSelect={onTimesOfDayChange}
               aria-label="Filter by time of day"
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Filter by Time of Day" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Times of Day</SelectItem>
-                {availableTimesOfDay.map(timeOfDay => (
-                  <SelectItem key={timeOfDay} value={timeOfDay}>
-                    {timeOfDay}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              className="w-full"
+            />
 
             <AnimatePresence>
               {showReset && (
@@ -278,4 +271,4 @@ export function FilterControls({
       </motion.form>
     </LayoutGroup>
   )
-} 
+}

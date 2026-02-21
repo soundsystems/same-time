@@ -98,21 +98,21 @@ export function formatTimezoneName(timezone: string): string {
 }
 
 /**
- * Helper function to check if two locations match the selected proximity type
+ * Helper function to check if two locations match any of the selected proximity types
  */
 function matchesProximity(
   locationOffset: number,
   referenceOffset: number,
   isSimilarTime: boolean,
-  proximityFilter: TimeType
+  proximityFilters: TimeType[]
 ): boolean {
   const timeType = getTimeType(locationOffset, referenceOffset, isSimilarTime)
-  return proximityFilter === 'All' || timeType === proximityFilter
+  return proximityFilters.length === 0 || proximityFilters.includes(timeType as TimeType)
 }
 
 /**
  * Get the badge info (color and label) for a location based on proximity filter with priority cascade
- * Priority: User timezone (green) > 1st selected (blue) > 2nd selected (pink) > 3rd selected (purple)
+ * Priority: User timezone (green) > 1st selected (blue) > 2nd selected (pink) > 3rd selected (purple) > 4th selected (emerald)
  */
 export function getProximityBadgeColor(
   locationOffset: number,
@@ -120,15 +120,15 @@ export function getProximityBadgeColor(
   userOffset: number,
   userCountryName: string | null,
   selectedLocations: Location[],
-  proximityFilter: TimeType
+  proximityFilters: TimeType[]
 ): { color: string; label: string } | null {
   // If no proximity filter is active, return null
-  if (proximityFilter === 'All') {
+  if (proximityFilters.length === 0) {
     return null
   }
 
   // Priority 1: Check if matches user timezone
-  if (userCountryName && matchesProximity(locationOffset, userOffset, locationIsSimilarTime, proximityFilter)) {
+  if (userCountryName && matchesProximity(locationOffset, userOffset, locationIsSimilarTime, proximityFilters)) {
     return {
       color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
       label: userCountryName
@@ -140,7 +140,7 @@ export function getProximityBadgeColor(
     locationOffset,
     selectedLocations[0].currentTimeOffsetInMinutes,
     locationIsSimilarTime,
-    proximityFilter
+    proximityFilters
   )) {
     return {
       color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
@@ -153,7 +153,7 @@ export function getProximityBadgeColor(
     locationOffset,
     selectedLocations[1].currentTimeOffsetInMinutes,
     locationIsSimilarTime,
-    proximityFilter
+    proximityFilters
   )) {
     return {
       color: 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300',
@@ -166,11 +166,24 @@ export function getProximityBadgeColor(
     locationOffset,
     selectedLocations[2].currentTimeOffsetInMinutes,
     locationIsSimilarTime,
-    proximityFilter
+    proximityFilters
   )) {
     return {
       color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
       label: selectedLocations[2].countryName
+    }
+  }
+
+  // Priority 5: Check if matches 4th selected timezone
+  if (selectedLocations[3] && matchesProximity(
+    locationOffset,
+    selectedLocations[3].currentTimeOffsetInMinutes,
+    locationIsSimilarTime,
+    proximityFilters
+  )) {
+    return {
+      color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+      label: selectedLocations[3].countryName
     }
   }
 

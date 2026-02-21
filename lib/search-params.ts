@@ -3,8 +3,8 @@ import { parseAsString, parseAsInteger, parseAsArrayOf, parseAsBoolean, createSe
 // Shared parsers for both server and client
 export const locationParsers = {
   language: parseAsArrayOf(parseAsString).withDefault([]),
-  timeType: parseAsString.withDefault('All'),
-  timeOfDay: parseAsString.withDefault('All'),
+  timeType: parseAsArrayOf(parseAsString).withDefault([]),
+  timeOfDay: parseAsArrayOf(parseAsString).withDefault([]),
   page: parseAsInteger.withDefault(1),
   sortField: parseAsString.withDefault('type'),
   sortDirection: parseAsString.withDefault('asc'),

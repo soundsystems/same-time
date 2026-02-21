@@ -40,8 +40,8 @@ interface LocationsTableProps {
   userTimezone: UserTimezone | null
   selectedLocations?: Location[]
   onLocationChangeAction: (location: Location) => void
-  selectedTimeType: TimeType
-  selectedTimeOfDay: TimeOfDay
+  selectedTimeTypes: TimeType[]
+  selectedTimesOfDay: TimeOfDay[]
   showAllCountries: boolean
   priorityCountries: string[]
   scrollMode: 'pagination' | 'infinite'
@@ -209,13 +209,13 @@ const calculateSmartPagination = (totalItems: number) => {
   }
 }
 
-export default function LocationsTable({ 
-  locations, 
+export default function LocationsTable({
+  locations,
   userTimezone,
   selectedLocations = [],
   onLocationChangeAction,
-  selectedTimeType: _selectedTimeType,
-  selectedTimeOfDay: _selectedTimeOfDay,
+  selectedTimeTypes: _selectedTimeTypes,
+  selectedTimesOfDay: _selectedTimesOfDay,
   showAllCountries,
   priorityCountries,
   scrollMode = 'pagination',
@@ -295,7 +295,8 @@ export default function LocationsTable({
     sortDirection,
     setSortDirection,
     toggleLanguage,
-    setTimeType
+    toggleTimeType,
+    selectedTimeTypes: activeTimeTypes,
   } = useLocationState()
 
   const handleLocationSelect = useCallback((location: Location) => {
@@ -309,8 +310,8 @@ export default function LocationsTable({
 
   const handleProximityClick = useCallback((e: React.MouseEvent, type: TimeType) => {
     e.stopPropagation()
-    setTimeType(type)
-  }, [setTimeType])
+    toggleTimeType(type)
+  }, [toggleTimeType])
 
   const filteredAndSortedLocations = useLocationFilters(locations, userTimezone, selectedLocations)
 
@@ -629,7 +630,7 @@ export default function LocationsTable({
         ) as TimeType | 'Different Time'
         const firstWord = type.split(' ')[0]
         const isFilterableType = type === 'Same Time' || type === 'Close Time' || type === 'Reverse Time'
-        const isActiveFilter = _selectedTimeType === type
+        const isActiveFilter = activeTimeTypes.includes(type as TimeType)
 
         const badgeInfo = getProximityBadgeColor(
           location.currentTimeOffsetInMinutes,
@@ -637,7 +638,7 @@ export default function LocationsTable({
           userTimezone?.currentTimeOffsetInMinutes || 0,
           userTimezone?.countryName || null,
           selectedLocations || [],
-          _selectedTimeType
+          activeTimeTypes
         )
 
         const BadgeContent = (
@@ -891,7 +892,7 @@ export default function LocationsTable({
     searchedCity,
     openStates,
     userTimezone,
-    _selectedTimeType,
+    activeTimeTypes,
     selectedLanguages,
     getLanguageBadgeColor,
     handleLanguageClick,

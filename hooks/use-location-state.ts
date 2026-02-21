@@ -25,11 +25,11 @@ export function useLocationState() {
     if (isSelected) {
       // Remove language
       setState({ language: current.filter(l => l !== lang), page: 1 })
-    } else if (current.length < 8) {
-      // Add language (max 8)
+    } else if (current.length < 6) {
+      // Add language (max 6)
       setState({ language: [...current, lang], page: 1 })
     }
-    // If already at 8, do nothing (could show toast in calling component)
+    // If already at 6, do nothing (could show toast in calling component)
   }, [state.language, setState])
 
   // Selected timezone management (max 3)
@@ -45,8 +45,8 @@ export function useLocationState() {
       return
     }
     
-    // Add to front, keep max 3
-    const updated = [encoded, ...current].slice(0, 3)
+    // Add to front, keep max 4
+    const updated = [encoded, ...current].slice(0, 4)
     setState({ selectedTzs: updated, page: 1 })
   }, [state.selectedTzs, setState])
 
@@ -105,20 +105,42 @@ export function useLocationState() {
     // biome-ignore lint/correctness/useExhaustiveDependencies: Only restore once on mount
   }, []) // Only run once on mount
 
+  const toggleTimeType = useCallback((type: TimeType) => {
+    const current = state.timeType as TimeType[]
+    const isSelected = current.includes(type)
+    if (isSelected) {
+      setState({ timeType: current.filter(t => t !== type), page: 1 })
+    } else {
+      setState({ timeType: [...current, type], page: 1 })
+    }
+  }, [state.timeType, setState])
+
+  const toggleTimeOfDay = useCallback((tod: TimeOfDay) => {
+    const current = state.timeOfDay as TimeOfDay[]
+    const isSelected = current.includes(tod)
+    if (isSelected) {
+      setState({ timeOfDay: current.filter(t => t !== tod), page: 1 })
+    } else {
+      setState({ timeOfDay: [...current, tod], page: 1 })
+    }
+  }, [state.timeOfDay, setState])
+
   return {
     selectedLanguages: state.language,
     setLanguages: (langs: string[]) => {
       setState({ language: langs, page: 1 })
     },
     toggleLanguage,
-    selectedTimeType: state.timeType as TimeType,
-    setTimeType: (type: TimeType) => {
-      setState({ timeType: type, page: 1 })
+    selectedTimeTypes: state.timeType as TimeType[],
+    setTimeTypes: (types: TimeType[]) => {
+      setState({ timeType: types, page: 1 })
     },
-    selectedTimeOfDay: state.timeOfDay as TimeOfDay,
-    setTimeOfDay: (timeOfDay: TimeOfDay) => {
-      setState({ timeOfDay, page: 1 })
+    toggleTimeType,
+    selectedTimesOfDay: state.timeOfDay as TimeOfDay[],
+    setTimesOfDay: (timesOfDay: TimeOfDay[]) => {
+      setState({ timeOfDay: timesOfDay, page: 1 })
     },
+    toggleTimeOfDay,
     page: state.page,
     setPage: (page: number) => {
       setState({ page })
@@ -134,7 +156,7 @@ export function useLocationState() {
     // Selected timezones
     selectedTimezones: state.selectedTzs,
     setSelectedTimezones: (tzs: string[]) => {
-      setState({ selectedTzs: tzs.slice(0, 3) }) // Max 3
+      setState({ selectedTzs: tzs.slice(0, 4) }) // Max 4
     },
     addSelectedTimezone,
     removeSelectedTimezone,

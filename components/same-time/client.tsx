@@ -37,11 +37,11 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
   const languageAutocompleteRef = useRef<{ reset: () => void; }>({ reset: () => {} })
 
   // Get location state
-  const { 
-    selectedTimeType: urlTimeType,
-    setTimeType: setUrlTimeType, 
-    selectedTimeOfDay: urlTimeOfDay,
-    setTimeOfDay: setUrlTimeOfDay, 
+  const {
+    selectedTimeTypes: urlTimeTypes,
+    setTimeTypes: setUrlTimeTypes,
+    selectedTimesOfDay: urlTimesOfDay,
+    setTimesOfDay: setUrlTimesOfDay,
     selectedLanguages,
     toggleLanguage,
     batchUpdate,
@@ -90,17 +90,17 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
   const fetchAndUpdateLocationsRef = useRef<((timezone: string, showToast?: boolean) => Promise<void>) | null>(null)
 
   // Use URL state directly - no need for local state duplication
-  const selectedTimeType = urlTimeType
-  const selectedTimeOfDay = urlTimeOfDay
+  const selectedTimeTypes = urlTimeTypes
+  const selectedTimesOfDay = urlTimesOfDay
 
   // Update handlers to only set URL state
-  const handleTimeTypeChange = useCallback((type: TimeType) => {
-    setUrlTimeType(type)
-  }, [setUrlTimeType])
+  const handleTimeTypesChange = useCallback((types: TimeType[]) => {
+    setUrlTimeTypes(types)
+  }, [setUrlTimeTypes])
 
-  const handleTimeOfDayChange = useCallback((timeOfDay: TimeOfDay) => {
-    setUrlTimeOfDay(timeOfDay)
-  }, [setUrlTimeOfDay])
+  const handleTimesOfDayChange = useCallback((timesOfDay: TimeOfDay[]) => {
+    setUrlTimesOfDay(timesOfDay)
+  }, [setUrlTimesOfDay])
 
   // Fetch and update locations using Server Action
   const fetchAndUpdateLocations = useCallback(async (timezone: string, showToast?: boolean) => {
@@ -212,7 +212,7 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
     addSelectedTimezone(encoded)
     
     // Batch URL updates to avoid History API throttling
-    batchUpdate({ timeType: 'All', timeOfDay: 'All', language: [], page: 1 })
+    batchUpdate({ timeType: [], timeOfDay: [], language: [], page: 1 })
     
     // Update the searched city state
     setSearchedCity(searchedCity || null)
@@ -237,8 +237,8 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
   const handleReset = useCallback(() => {
     // Batch all URL state updates into a single call to avoid History API throttling
     batchUpdate({
-      timeType: 'All',
-      timeOfDay: 'All',
+      timeType: [],
+      timeOfDay: [],
       language: [],
       page: 1,
       sortField: 'type',
@@ -279,14 +279,13 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
       )
       const timeOfDay = getTimeOfDay(location.localHour)
 
-      const matchesTimeType = selectedTimeType === 'All' || timeType === selectedTimeType
-      const matchesTimeOfDay = selectedTimeOfDay === 'All' || timeOfDay === selectedTimeOfDay
+      const matchesTimeType = selectedTimeTypes.length === 0 || selectedTimeTypes.includes(timeType as TimeType)
+      const matchesTimeOfDay = selectedTimesOfDay.length === 0 || selectedTimesOfDay.includes(timeOfDay as TimeOfDay)
       const matchesPriority = showAllCountries || PRIORITY_COUNTRIES.includes(location.countryName)
 
       return matchesTimeType && matchesTimeOfDay && matchesPriority
     })
 
-    // Then get languages only from filtered locations
     const langMap = new Map<string, LanguageInfo>()
     for (const location of filteredLocations) {
       for (const lang of location.languages) {
@@ -308,7 +307,7 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
       }
     }
     return Array.from(langMap.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [data.locations, data.userTimezone?.currentTimeOffsetInMinutes, selectedTimeType, selectedTimeOfDay, showAllCountries])
+  }, [data.locations, data.userTimezone?.currentTimeOffsetInMinutes, selectedTimeTypes, selectedTimesOfDay, showAllCountries])
 
   // Calculate available times of day
   const availableTimesOfDay = useMemo(() => {
@@ -354,7 +353,7 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
           
           <AnimatePresence mode="popLayout">
             {(selectedLocations || []).length > 0 && (
-              <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {(selectedLocations || []).map((location, index) => (
                   <SelectedTimezoneInfo 
                     key={`${location.countryName}-${location.timezone}-${location.alternativeName}`}
@@ -369,17 +368,17 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
             )}
           </AnimatePresence>
           
-          <FilterControls 
+          <FilterControls
             locations={data.locations}
             userTimezone={data.userTimezone}
             availableLanguages={availableLanguages}
             availableTimesOfDay={availableTimesOfDay}
-            selectedTimeType={selectedTimeType}
-            selectedTimeOfDay={selectedTimeOfDay}
+            selectedTimeTypes={selectedTimeTypes}
+            selectedTimesOfDay={selectedTimesOfDay}
             selectedLocations={selectedLocations}
             onLocationChange={handleLocationChange}
-            onTimeTypeChange={handleTimeTypeChange}
-            onTimeOfDayChange={handleTimeOfDayChange}
+            onTimeTypesChange={handleTimeTypesChange}
+            onTimesOfDayChange={handleTimesOfDayChange}
             onReset={handleReset}
             languageAutocompleteRef={languageAutocompleteRef}
             showAllCountries={showAllCountries}
@@ -388,13 +387,13 @@ export function SameTimeClient({ initialData }: SameTimeClientProps) {
             onScrollModeChange={handleScrollModeChange}
           />
         </div>
-        <LocationsTable 
+        <LocationsTable
           locations={data.locations}
           userTimezone={data.userTimezone}
           selectedLocations={selectedLocations}
           onLocationChangeAction={handleLocationChange}
-          selectedTimeType={selectedTimeType}
-          selectedTimeOfDay={selectedTimeOfDay}
+          selectedTimeTypes={selectedTimeTypes}
+          selectedTimesOfDay={selectedTimesOfDay}
           showAllCountries={showAllCountries}
           priorityCountries={PRIORITY_COUNTRIES}
           scrollMode={scrollMode}
