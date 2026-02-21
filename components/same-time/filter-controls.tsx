@@ -3,7 +3,7 @@ import { LanguageAutocomplete } from '../autocomplete/language-autocomplete'
 import { ProximityAutocomplete } from '../autocomplete/proximity-autocomplete'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { FilterControlsProps, TimeType, TimeOfDay, Location } from './types'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, SlidersHorizontal, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence, LayoutGroup } from 'motion/react'
@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { PRIORITY_COUNTRIES } from './index'
 import { useLocationState } from '@/hooks/use-location-state'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
 interface AnimationConfig {
   duration: number
@@ -58,7 +59,17 @@ export function FilterControls({
 }) {
   const [isSpinning, setIsSpinning] = useState(false)
   const [showReset, setShowReset] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isFiltersOpen, setIsFiltersOpen] = useState(true)
   const { selectedLanguages, setLanguages, removeSelectedTimezone } = useLocationState()
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767px)')
+    setIsMobile(mediaQuery.matches)
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mediaQuery.addEventListener('change', handler)
+    return () => mediaQuery.removeEventListener('change', handler)
+  }, [])
 
   const handleLocationRemove = (location: Location) => {
     const encoded = `${location.countryName}|${location.timezone}|${location.alternativeName}`
@@ -104,178 +115,212 @@ export function FilterControls({
     return null
   }
 
+  const effectiveOpen = !isMobile || isFiltersOpen
+
   // 4. render
   return (
     <LayoutGroup id="filter-controls">
-      <motion.form 
-        className="grid grid-cols-1 gap-4 w-full max-w-screen-lg mx-auto"
-        aria-label="Filter locations"
-        layout="size"
-        layoutId="filter-form"
-        transition={{ 
-          layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 }
+      <Collapsible
+        open={effectiveOpen}
+        onOpenChange={(open) => {
+          if (isMobile) setIsFiltersOpen(open)
         }}
+        className="w-full max-w-screen-lg mx-auto"
       >
-        {/* Top row - Location selector with toggle on larger screens */}
-        <motion.div 
-          className="flex flex-col md:flex-row md:items-center"
-          layout="position"
-          layoutId="top-row"
-          transition={{ 
-            layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 }
-          }}
-        >
-          <motion.div 
-            className="flex-1 md:mr-4"
-            layout="size"
-            layoutId="location-autocomplete"
+        {/* Mobile-only toggle button */}
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className="md:hidden w-full flex items-center justify-between mb-2"
+            aria-expanded={isFiltersOpen}
+            aria-controls="mobile-filter-content"
           >
-            <LocationAutocomplete 
-              locations={locations} 
-              onSelect={onLocationChange}
-              onRemove={handleLocationRemove}
-              selectedLocations={selectedLocations}
-              maxSelections={3}
-              initialLocation={locations.find(loc => loc.timezone === userTimezone?.name)}
-              aria-label="Select up to 3 timezones"
-              showAllCountries={scrollMode === 'infinite'}
-              priorityCountries={PRIORITY_COUNTRIES}
-              className="w-full"
-            />
-          </motion.div>
-          <motion.div 
-            className="hidden md:flex items-center gap-2"
-            layout="position"
-            layoutId="desktop-toggle"
-          >
-            <Label 
-              htmlFor="show-all-countries-desktop"
-              className="text-sm text-gray-500 whitespace-nowrap"
+            <span className="flex items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4" />
+              {isFiltersOpen ? 'Hide Filters' : 'Show Filters'}
+            </span>
+            <motion.div
+              animate={{ rotate: isFiltersOpen ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
             >
-              Show all countries
-            </Label>
-            <Switch
-              id="show-all-countries-desktop"
-              checked={showAllCountries}
-              onCheckedChange={onShowAllCountriesChange}
-            />
-          </motion.div>
-        </motion.div>
-
-        {/* Bottom row - Other filters */}
-        <motion.div 
-          className="grid grid-cols-1 md:grid-cols-3 gap-4"
-          layout="position"
-          layoutId="bottom-row"
-          transition={{ 
-            layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 }
-          }}
-        >
-          <motion.div 
-            className="flex items-center gap-4"
-            layout="position"
-            layoutId="language-filter"
-          >
-            <LanguageAutocomplete 
-              ref={languageAutocompleteRef}
-              languages={formattedLanguages}
-              onSelect={setLanguages}
-              selectedLanguages={selectedLanguages}
-              maxSelections={8}
-              aria-label="Filter by languages" 
-              className="w-full"
-              placeholder="All Languages"
-              mobilePlaceholder="All Langs"
-            />
-            {/* Show toggle only on mobile */}
-            <motion.div 
-              className="md:hidden flex items-center gap-2"
-              layout="position"
-              layoutId="mobile-toggle"
-            >
-              <Label 
-                htmlFor="show-all-countries-mobile"
-                className="text-sm text-gray-500 whitespace-nowrap"
-              >
-                Show all
-              </Label>
-              <Switch
-                id="show-all-countries-mobile"
-                checked={showAllCountries}
-                onCheckedChange={onShowAllCountriesChange}
-              />
+              <ChevronDown className="h-4 w-4" />
             </motion.div>
-          </motion.div>
+          </Button>
+        </CollapsibleTrigger>
 
-          <motion.div 
-            layout="position"
-            layoutId="time-type-filter"
+        <CollapsibleContent id="mobile-filter-content">
+          <motion.form
+            className="grid grid-cols-1 gap-4 w-full"
+            aria-label="Filter locations"
+            layout="size"
+            layoutId="filter-form"
+            transition={{
+              layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 }
+            }}
           >
-            <ProximityAutocomplete 
-              value={selectedTimeType} 
-              onSelect={onTimeTypeChange}
-              aria-label="Filter by proximity"
-              className="w-full"
-            />
-          </motion.div>
-
-          <motion.div 
-            className="flex items-center gap-4"
-            layout="position"
-            layoutId="time-of-day-filter"
-          >
-            <Select 
-              value={selectedTimeOfDay} 
-              onValueChange={onTimeOfDayChange}
-              aria-label="Filter by time of day"
+            {/* Top row - Location selector with toggle on larger screens */}
+            <motion.div
+              className="flex flex-col md:flex-row md:items-center"
+              layout="position"
+              layoutId="top-row"
+              transition={{
+                layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 }
+              }}
             >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Filter by Time of Day" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Times of Day</SelectItem>
-                {availableTimesOfDay.map(timeOfDay => (
-                  <SelectItem key={timeOfDay} value={timeOfDay}>
-                    {timeOfDay}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <AnimatePresence>
-              {showReset && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ duration: 0.2 }}
+              <motion.div
+                className="flex-1 md:mr-4"
+                layout="size"
+                layoutId="location-autocomplete"
+              >
+                <LocationAutocomplete
+                  locations={locations}
+                  onSelect={onLocationChange}
+                  onRemove={handleLocationRemove}
+                  selectedLocations={selectedLocations}
+                  maxSelections={3}
+                  initialLocation={locations.find(loc => loc.timezone === userTimezone?.name)}
+                  aria-label="Select up to 3 timezones"
+                  showAllCountries={scrollMode === 'infinite'}
+                  priorityCountries={PRIORITY_COUNTRIES}
+                  className="w-full"
+                />
+              </motion.div>
+              <motion.div
+                className="hidden md:flex items-center gap-2"
+                layout="position"
+                layoutId="desktop-toggle"
+              >
+                <Label
+                  htmlFor="show-all-countries-desktop"
+                  className="text-sm text-gray-500 whitespace-nowrap"
                 >
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleReset}
-                    className="relative"
-                    aria-label="Reset filters"
+                  Show all countries
+                </Label>
+                <Switch
+                  id="show-all-countries-desktop"
+                  checked={showAllCountries}
+                  onCheckedChange={onShowAllCountriesChange}
+                />
+              </motion.div>
+            </motion.div>
+
+            {/* Bottom row - Other filters */}
+            <motion.div
+              className="grid grid-cols-1 md:grid-cols-3 gap-4"
+              layout="position"
+              layoutId="bottom-row"
+              transition={{
+                layout: { duration: 0.3, type: "spring", stiffness: 200, damping: 30 }
+              }}
+            >
+              <motion.div
+                className="flex items-center gap-4"
+                layout="position"
+                layoutId="language-filter"
+              >
+                <LanguageAutocomplete
+                  ref={languageAutocompleteRef}
+                  languages={formattedLanguages}
+                  onSelect={setLanguages}
+                  selectedLanguages={selectedLanguages}
+                  maxSelections={8}
+                  aria-label="Filter by languages"
+                  className="w-full"
+                  placeholder="All Languages"
+                  mobilePlaceholder="All Langs"
+                />
+                {/* Show toggle only on mobile */}
+                <motion.div
+                  className="md:hidden flex items-center gap-2"
+                  layout="position"
+                  layoutId="mobile-toggle"
+                >
+                  <Label
+                    htmlFor="show-all-countries-mobile"
+                    className="text-sm text-gray-500 whitespace-nowrap"
                   >
-                    <motion.div
-                      animate={isSpinning ? {
-                        rotate: 360 * (animationConfig.rotations || 1),
-                        scale: animationConfig.scale || [1, 0.85, 1]
-                      } : {}}
-                      transition={{
-                        duration: animationConfig.duration
-                      }}
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </motion.div>
-                  </Button>
+                    Show all
+                  </Label>
+                  <Switch
+                    id="show-all-countries-mobile"
+                    checked={showAllCountries}
+                    onCheckedChange={onShowAllCountriesChange}
+                  />
                 </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
-        </motion.div>
-      </motion.form>
+              </motion.div>
+
+              <motion.div
+                layout="position"
+                layoutId="time-type-filter"
+              >
+                <ProximityAutocomplete
+                  value={selectedTimeType}
+                  onSelect={onTimeTypeChange}
+                  aria-label="Filter by proximity"
+                  className="w-full"
+                />
+              </motion.div>
+
+              <motion.div
+                className="flex items-center gap-4"
+                layout="position"
+                layoutId="time-of-day-filter"
+              >
+                <Select
+                  value={selectedTimeOfDay}
+                  onValueChange={onTimeOfDayChange}
+                  aria-label="Filter by time of day"
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Filter by Time of Day" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Times of Day</SelectItem>
+                    {availableTimesOfDay.map(timeOfDay => (
+                      <SelectItem key={timeOfDay} value={timeOfDay}>
+                        {timeOfDay}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <AnimatePresence>
+                  {showReset && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleReset}
+                        className="relative"
+                        aria-label="Reset filters"
+                      >
+                        <motion.div
+                          animate={isSpinning ? {
+                            rotate: 360 * (animationConfig.rotations || 1),
+                            scale: animationConfig.scale || [1, 0.85, 1]
+                          } : {}}
+                          transition={{
+                            duration: animationConfig.duration
+                          }}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </motion.div>
+                      </Button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            </motion.div>
+          </motion.form>
+        </CollapsibleContent>
+      </Collapsible>
     </LayoutGroup>
   )
 } 
