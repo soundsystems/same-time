@@ -150,7 +150,7 @@ export const LanguageAutocomplete = React.forwardRef<
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[180px] p-0">
+      <PopoverContent className="w-[180px] p-0" side="bottom" avoidCollisions={false}>
         <Command>
           <CommandInput 
             placeholder="Search languages..." 
