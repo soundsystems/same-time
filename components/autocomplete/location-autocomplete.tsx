@@ -191,7 +191,7 @@ export const LocationAutocomplete = React.memo(function LocationAutocomplete({
           role="combobox"
           aria-expanded={open}
           aria-label={ariaLabel}
-          className={cn("w-[400px] min-h-10 justify-between", className)}
+          className={cn("w-[400px] h-auto min-h-10 justify-between", className)}
           name={name}
         >
           <div className="flex items-center gap-2 flex-1 min-w-0">
