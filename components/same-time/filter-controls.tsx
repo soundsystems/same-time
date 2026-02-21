@@ -97,7 +97,7 @@ export function FilterControls({
     return null
   }
 
-  const validTimeTypes: TimeType[] = ['All', 'Same Time', 'Close Time', 'Reverse Time']
+  const validTimeTypes: TimeType[] = ['All', 'Synced', 'Adjacent', 'Reverse Time']
   const validTimeOfDay: TimeOfDay[] = ['All', 'Early Morning', 'Morning', 'Afternoon', 'Evening', 'Night', 'Late Night']
 
   if (!validTimeTypes.includes(selectedTimeType) || !validTimeOfDay.includes(selectedTimeOfDay)) {

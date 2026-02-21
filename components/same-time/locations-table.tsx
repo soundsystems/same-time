@@ -626,9 +626,9 @@ export default function LocationsTable({
           location.currentTimeOffsetInMinutes,
           userTimezone?.currentTimeOffsetInMinutes || 0,
           location.isSimilarTime
-        ) as TimeType | 'Different Time'
+        ) as TimeType | 'Far Out'
         const firstWord = type.split(' ')[0]
-        const isFilterableType = type === 'Same Time' || type === 'Close Time' || type === 'Reverse Time'
+        const isFilterableType = type === 'Synced' || type === 'Adjacent' || type === 'Reverse Time'
         const isActiveFilter = _selectedTimeType === type
 
         const badgeInfo = getProximityBadgeColor(
@@ -643,8 +643,9 @@ export default function LocationsTable({
         const BadgeContent = (
           <>
             <span className="md:hidden">
-              {firstWord === 'Similar' ? 'Close' : 
-                firstWord === 'Different' ? 'Diff' : 
+              {type === 'Synced' ? 'Sync' :
+                type === 'Adjacent' ? 'Adj' :
+                type === 'Far Out' ? 'Far' :
                 firstWord === 'Early' ? 'Early' :
                 firstWord === 'Late' ? 'Late' :
                 firstWord === 'Reverse' ? 'Rev' :

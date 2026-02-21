@@ -25,16 +25,16 @@ export function getLocalTime(offsetInMinutes: number): string {
 }
 
 export function getTimeType(
-  offsetInMinutes: number, 
-  userOffsetInMinutes: number, 
+  offsetInMinutes: number,
+  userOffsetInMinutes: number,
   isSimilarTime: boolean
 ): string {
   const timeDiff = Math.abs((offsetInMinutes - userOffsetInMinutes) / 60)
 
-  if (timeDiff === 0) return 'Same Time'
+  if (timeDiff === 0) return 'Synced'
   if (timeDiff === 12) return 'Reverse Time'
-  if (timeDiff <= 3 || isSimilarTime) return 'Close Time'
-  return 'Different Time'
+  if (timeDiff <= 3 || isSimilarTime) return 'Adjacent'
+  return 'Far Out'
 }
 
 export function getTimeBadge(offsetInMinutes: number, userOffsetInMinutes: number): string | null {
@@ -47,11 +47,11 @@ export function getTimeBadge(offsetInMinutes: number, userOffsetInMinutes: numbe
 
 export function getTypeColor(type: string): string {
   switch (type) {
-    case 'Same Time':
+    case 'Synced':
       return 'bg-green-100 text-green-800'
     case 'Reverse Time':
       return 'bg-red-100 text-red-800'
-    case 'Close Time':
+    case 'Adjacent':
       return 'bg-blue-100 text-blue-800'
     default:
       return 'bg-gray-100 text-gray-800'

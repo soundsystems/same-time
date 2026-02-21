@@ -101,10 +101,10 @@ export function useLocationFilters(
           // Get tier based on time type and language match
           const getTier = (type: string, hasMatchingLang: boolean) => {
             switch (type) {
-              case 'Same Time': return hasMatchingLang ? 1 : 2
-              case 'Close Time': return hasMatchingLang ? 3 : 4
+              case 'Synced': return hasMatchingLang ? 1 : 2
+              case 'Adjacent': return hasMatchingLang ? 3 : 4
               case 'Reverse Time': return hasMatchingLang ? 5 : 6
-              case 'Different Time': return hasMatchingLang ? 7 : 8
+              case 'Far Out': return hasMatchingLang ? 7 : 8
               default: return 9
             }
           }

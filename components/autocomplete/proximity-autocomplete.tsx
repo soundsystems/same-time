@@ -34,8 +34,8 @@ interface ProximityOption {
 
 const PROXIMITY_OPTIONS: ProximityOption[] = [
   { value: 'All', label: 'All Proximities', display: 'All Proximities' },
-  { value: 'Same Time', label: 'Same Time', display: '✅ Same Time' },
-  { value: 'Close Time', label: 'Close Time', display: '☑️ Close Time' },
+  { value: 'Synced', label: 'Synced', display: '✅ Synced' },
+  { value: 'Adjacent', label: 'Adjacent', display: '☑️ Adjacent' },
   { value: 'Reverse Time', label: 'Reverse Time', display: '😵‍💫 Reverse Time' },
 ]
 
