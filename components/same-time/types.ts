@@ -47,7 +47,7 @@ export interface SelectProps {
   children: React.ReactNode
 }
 
-export type TimeType = 'All' | 'Same Time' | 'Close Time' | 'Reverse Time'
+export type TimeType = 'All' | 'Synced' | 'Adjacent' | 'Reverse Time'
 export type TimeOfDay = 'All' | 'Early Morning' | 'Morning' | 'Afternoon' | 'Evening' | 'Night' | 'Late Night'
 export type SortField = 'country' | 'type'
 
