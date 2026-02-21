@@ -1122,27 +1122,26 @@ export default function LocationsTable({
   // Render normal table for pagination mode
   return (
     <div className="relative">
-      <AnimatePresence>
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {rows.length ? (
-              rows.map((row) => {
+      <Table>
+        <TableHeader>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <TableHead key={header.id}>
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(
+                        header.column.columnDef.header,
+                        header.getContext()
+                      )}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {rows.length ? (
+            rows.map((row) => {
                 const location = row.original
                 const locationId = getLocationId(location)
                 const isUserTz = isUserTimezone(location)
@@ -1202,9 +1201,8 @@ export default function LocationsTable({
                 </td>
               </TableRow>
             )}
-          </TableBody>
-        </Table>
-      </AnimatePresence>
+        </TableBody>
+      </Table>
 
       {scrollMode === 'pagination' && (
         <motion.div
